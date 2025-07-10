@@ -107,21 +107,24 @@ module control_unit (
                 end
             end
 
-				LoadStore3 : begin     // put data on BUS1, no write yet
-								if (IR==8'h96)      
-									Bus1_Sel = 2'b01;   // A-reg
-								else                Bus1_Sel = 2'b10;   // B-reg
-									next = LoadStore4;                      // wait one clk
-								end
+			LoadStore3 : begin     // put data on BUS1, no write yet
+				if (IR==8'h96)      
+					Bus1_Sel = 2'b01;   // A-reg
+				else                
+                Bus1_Sel = 2'b10;   // B-reg
+				
+                next = LoadStore4;                      // wait one clk
+			end
 
-				LoadStore4 : begin     // data/address already stable
-								if (IR==8'h96)      
-									Bus1_Sel = 2'b01;   // KEEP SAME SOURCE
-								else
-									Bus1_Sel = 2'b10;
-								write = 1;                             // pulse write
-								next  = Fetch0;
-								end
+			LoadStore4 : begin     // data/address already stable
+				if (IR==8'h96)      
+			    	Bus1_Sel = 2'b01;   // KEEP SAME SOURCE
+				else
+					Bus1_Sel = 2'b10;
+				
+                write = 1;                             // pulse write
+				next  = Fetch0;
+			end
 
             Data: begin
                 CCR_Load = 1;
