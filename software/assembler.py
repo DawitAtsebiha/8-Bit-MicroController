@@ -1,5 +1,5 @@
-"""mini8_assembler.py
-Self‑contained command‑line assembler for the 8‑bit Verilog CPU.
+"""assembly.py
+Self‑contained command‑line assembler for the 8‑bit MicroController.
 
 New in this revision
 ────────────────────
