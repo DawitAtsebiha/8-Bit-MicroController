@@ -44,8 +44,9 @@ This project includes:
 Before running this project, ensure you have the following tools installed:
 
 - **Python 3.7+** with the `click` library
-- **Icarus Verilog** (iverilog) for simulation
+- **Icarus Verilog** (iverilog) for simulation 
 - **GTKWave** for waveform visualization
+*I would recommend using chocolatey to install both Icarus and GTKWave*
 - **Text editor** or IDE for writing assembly code
 
 ### Installing Dependencies
@@ -54,14 +55,14 @@ Before running this project, ensure you have the following tools installed:
 # Install Python dependencies
 pip install click
 
-# On Windows, you may need to install:
-# - Icarus Verilog: http://bleyer.org/icarus/
-# - GTKWave: https://gtkwave.sourceforge.net/
+# Install Icarus and GTKWave (if using choco)
+choco install iverilog
+choco install gtkwave
 ```
 
 ## Getting Started
 
-### Step 1: Learn the Assembly Language
+### Step 1: Get Familiar with 8-Bit Assembly
 
 Before writing code, consult the **8-But MightyController Companion Document** (`8_But_MightyController_Companion_Document.pdf`) to understand:
 - Supported instructions and addressing modes
