@@ -160,10 +160,10 @@ DONE:   BRA   DONE          ; 20 FE
 When viewing waveforms, look for these key signals:
 
 **Program Monitoring:**
-- `fibonacci_output` - Fibonacci sequence values
-- `blink_output` - LED blink patterns
-- `fibonacci_valid` - Fibonacci test active
+- `blink_output` - LED blink patterns - Outputs from 0 to 20040 ns
 - `blink_valid` - Blink test active
+- `fibonacci_output` - Fibonacci sequence values - Outputs from 20040 ns to 40070 ns
+- `fibonacci_valid` - Fibonacci test active
 
 **CPU State:**
 - `PC` - Program Counter
