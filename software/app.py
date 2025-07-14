@@ -11,7 +11,6 @@ from PyQt6.QtGui import QTextCursor
 
 
 class MainWindow(QWidget):
-    # ────────────────────────────────────────────  GUI SETUP  ───────────────────────────────────────────
     def __init__(self):
         super().__init__()
         self.setWindowTitle("8-Bit MightyController")
@@ -80,7 +79,7 @@ class MainWindow(QWidget):
         # keep last output path for message box
         self._pending_bin = ""
 
-    # ────────────────────────────────────────────  UI HELPERS  ──────────────────────────────────────────
+    # UI HELPERS 
     def _mk_button(self, text: str, height: int) -> QPushButton:
         b = QPushButton(text); b.setFixedHeight(height); return b
 
@@ -97,7 +96,7 @@ class MainWindow(QWidget):
 
     def _info(self, title: str, text: str): QMessageBox.information(self, title, text)
 
-    # ────────────────────────────────────────────  FILE  ────────────────────────────────────────────────
+    # Assembly File Selection
     def _select_file(self):
         fn, _ = QFileDialog.getOpenFileName(self, "Select Assembly File", "", "Assembly Files (*.asm);;All Files (*)")
         if fn:
@@ -110,7 +109,7 @@ class MainWindow(QWidget):
             self.file_label.setText("Please select your ASM (Assembly) file.")
             self._set_status("No file selected", "#e74c3c")
 
-    # ────────────────────────────────────────────  ASSEMBLE  ───────────────────────────────────────────
+    # Assembling into Binary
     def _run_assemble(self):
         if not self.selected_file:
             self._info("Warning", "Please select an ASM file first."); return
@@ -130,7 +129,7 @@ class MainWindow(QWidget):
         self.proc_asm.readyReadStandardOutput.disconnect()
         self.proc_asm.finished.disconnect()
 
-    # ────────────────────────────────────────────  COMPILE+SIM  ────────────────────────────────────────
+    # Compiling + Simulation
     def _run_compile(self):
         self.console.clear()
         self._set_status("Compiling…", "#f39c12")
@@ -162,19 +161,18 @@ class MainWindow(QWidget):
             self._info("Simulation Complete", "Simulation finished. Use 'Show Wave Simulation' if desired.")
         self.proc_sim.readyReadStandardOutput.disconnect(); self.proc_sim.finished.disconnect()
 
-    # ────────────────────────────────────────────  WAVES  ──────────────────────────────────────────────
+    # Producing waves simulation
     def _run_wave(self):
         self._set_status("Opening GTKWave…", "#8e44ad")
         self.proc_asm.start("gtkwave", ["waves.vcd"])   # reuse proc_asm as a simple worker
 
-    # ────────────────────────────────────────────  TEARDOWN  ───────────────────────────────────────────
+    # Exiting
     def closeEvent(self, e):
         for p in (self.proc_asm, self.proc_cc, self.proc_sim):
             if p.state() != QProcess.ProcessState.NotRunning: p.kill()
         e.accept()
 
 
-# ────────────────────────────────────────────  MAIN  ──────────────────────────────────────────────────
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
@@ -183,4 +181,3 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
-# ────────────────────────────────────────────  ASSEMBLER  ────────────────────────────────────────────
