@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module computer_tb_pro;
+module computer_TB;
 
     // ▸ DUT I/O wires (inside the module, not global)
     tri  [7:0] io_data;
@@ -59,13 +59,13 @@ module computer_tb_pro;
         end
     endtask
 
-    // ------------------------------------------------------------------------------------------
-    // 2.  Main sequence – run two ROM images (blink and fibo (can have more added))
-    // ------------------------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------------------------------------------------------------------
+    // 2.  Main sequence – run the two demo ROM images (still working on a way to automatically load assembled ROMs into MicroController)
+    // -----------------------------------------------------------------------------------------------------------------------------------------
     integer rom_sel;
     initial begin
         $dumpfile("waves.vcd");
-        $dumpvars(0, computer_tb_pro);
+        $dumpvars(0, computer_TB);
 
         for (rom_sel = 0; rom_sel < 2; rom_sel = rom_sel + 1) begin
             if (rom_sel == 0) load_rom(ROM0);
