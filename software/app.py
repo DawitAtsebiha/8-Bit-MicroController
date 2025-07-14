@@ -114,7 +114,7 @@ class MainWindow(QWidget):
         if not self.selected_file:
             self._info("Warning", "Please select an ASM file first."); return
         self.console.clear()
-        out_bin = os.path.join("build", f"{self.file_name}.bin"); self._pending_bin = out_bin
+        out_bin = os.path.join("ROM Programs", "build", f"{self.file_name}.bin"); self._pending_bin = out_bin
         self._set_status("Assembling…", "#f39c12")
         self.proc_asm.readyReadStandardOutput.connect(lambda: self._append_output(self.proc_asm),
                                                       Qt.ConnectionType.UniqueConnection)
@@ -133,7 +133,7 @@ class MainWindow(QWidget):
     def _run_compile(self):
         self.console.clear()
         self._set_status("Compiling…", "#f39c12")
-        build_dir = Path("build"); build_dir.mkdir(exist_ok=True)
+        build_dir = Path("ROM Programs/build"); build_dir.mkdir(exist_ok=True)
         src = glob.glob("verilog/*.sv") + ["testbench/computer_TB.sv"]
         args = ["-g2012", "-o", str(build_dir / "tb.out"), "-s", "computer_TB", *src]
 
