@@ -45,7 +45,7 @@ A complete 8-bit CPU implementation with GUI interface, custom assembler, System
     └── MicroController Schematics/
 ```
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 **Required Software:**
 - **Python 3.7+** with PyQt6 and click
@@ -61,7 +61,7 @@ choco install python iverilog gtkwave
 pip install PyQt6 click
 ```
 
-## 📝 Supported Instructions
+## Supported Instructions
 
 | Instruction | Mode | Example | Description |
 |-------------|------|---------|-------------|
@@ -85,7 +85,7 @@ pip install PyQt6 click
 - **DIR**: Direct (`$80`)
 - **REL**: Relative (labels)
 
-## 🔧 Memory Map
+## Memory Map
 
 | Address Range | Description |
 |---------------|-------------|
@@ -96,17 +96,64 @@ pip install PyQt6 click
 ## Sample Programs
 
 ### Blink Program (`ROM Programs/asm/blink.asm`)
+
+Blinks an LED ON and OFF in a loop
 ```assembly
-LDA  #$01      ; Load pattern 1 (LED on)
+        LDA  #$01      ; Load pattern 1 (LED on)
 loop:
-    STAA $F0   ; Output to LED port
-    LDA  #$00  ; Load pattern 0 (LED off)  
-    STAA $F0   ; Output to LED port
-    BRA  loop  ; Continue forever
+        STAA $F0       ; Output to LED port (on)
+        LDA  #$01      ; Reload A (creates a delay cycle)
+        LDA  #$00     
+        STAA $F0       
+        LDA  #$00   
+        BRA  loop      ; Continue blinking until simulation is terminated
 ```
 
 ### Fibonacci Program (`ROM Programs/asm/fibo.asm`)
-Calculates Fibonacci sequence: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233...
+
+Calculates Fibonacci sequence: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ... with wrap around
+``` assembly
+; seeds
+        LDA   #$00          ; F0
+        STAA  $80
+        STAA  $F0  
+        
+        LDA   #$01          ; F1
+        STAA  $81
+        STAA  $F0           ; Outputs current F to I/O port 0
+
+; F2 ­–­­ F14 
+        LDA   #$00          ; F2 = 0+1
+        LDAB  #$01
+        ADD
+        STAA  $82
+        STAA  $F0          
+
+        LDA   #$01          ; F3 = 1+1
+        LDAB  #$01
+        ADD
+        STAA  $83
+        STAA  $F0                   
+
+        .
+        .
+        .   
+
+        LDA   #$59          ; F13 = 89+144
+        LDAB  #$90
+        ADD
+        STAA  $8D
+        STAA  $F0         
+
+        LDA   #$90          ; F14 = 144+233 (wrap 121)
+        LDAB  #$E9
+        ADD
+        STAA  $8E
+        STAA  $F0        
+
+; halt
+DONE:   BRA   DONE          ; 20 FE
+```
 
 ## GTKWave Signals
 
