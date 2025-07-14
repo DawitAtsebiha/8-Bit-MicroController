@@ -68,6 +68,7 @@ class MainWindow(QWidget):
         self.proc_asm  = QProcess(self)
         self.proc_cc   = QProcess(self)
         self.proc_sim  = QProcess(self)
+        self.proc_wave = QProcess(self) 
         for p in (self.proc_asm, self.proc_cc, self.proc_sim):
             p.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
 
@@ -148,27 +149,35 @@ class MainWindow(QWidget):
             self._set_status("Compilation failed", "#e74c3c")
             self._info("Compilation Error", "Compilation failed — see console.")
             self.proc_cc.readyReadStandardOutput.disconnect(); self.proc_cc.finished.disconnect(); return
-
-        self._set_status("Running simulation…", "#f39c12")
-        self.proc_sim.readyReadStandardOutput.connect(lambda: self._append_output(self.proc_sim),
-                                                      Qt.ConnectionType.AutoConnection)
-        self.proc_sim.finished.connect(self._on_sim_done, Qt.ConnectionType.AutoConnection)
-        self.proc_sim.start("vvp", ["-n", "ROM Programs/build/tb.out"])
+        else:
+            self._set_status("Running simulation…", "#f39c12")
+            self.proc_sim.readyReadStandardOutput.connect(lambda: self._append_output(self.proc_sim),
+                                                        Qt.ConnectionType.AutoConnection)
+            self.proc_sim.finished.connect(self._on_sim_done, Qt.ConnectionType.AutoConnection)
+            self.proc_sim.start("vvp", ["-n", "ROM Programs/build/tb.out"])
 
     def _on_sim_done(self):
         ok = (self.proc_sim.exitCode() == 0)
         self._set_status("Simulation OK" if ok else "Simulation failed", "#27ae60" if ok else "#e74c3c")
         if ok:
-            self._info("Simulation Complete", "Simulation finished. Use 'Show Wave Simulation' if desired.")
+            self._info("Simulation Complete", "Simulation finished. Use 'Show Wave Simulation' to see the waves!")
+        
+        self.proc_sim.readyReadStandardOutput.disconnect()
+        self.proc_sim.finished.disconnect()
 
-    # Producing waves simulation
     def _run_wave(self):
         self._set_status("Opening GTKWave…", "#8e44ad")
-        self.proc_asm.start("gtkwave", ["waves.vcd"])   # reuse proc_asm as a simple worker
+        self.proc_wave.start("gtkwave", ["waves.vcd"])   
+
+    def _on_wave_done(self):
+        ok = (self.proc_wave.exitCode() == 0)
+        self._set_status("GTKWave opened" if ok else "Failed to open GTKWave", "#27ae60" if ok else "#e74c3c")
+        if not ok:
+            self._info("Error", "Failed to open GTKWave. Ensure it is installed and in PATH.")
 
     # Exiting
     def closeEvent(self, e):
-        for p in (self.proc_asm, self.proc_cc, self.proc_sim):
+        for p in (self.proc_asm, self.proc_cc, self.proc_sim, self.proc_wave):
             if p.state() != QProcess.ProcessState.NotRunning: p.kill()
         e.accept()
 
