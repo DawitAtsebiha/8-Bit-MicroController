@@ -137,9 +137,8 @@ class MainWindow(QWidget):
         src = glob.glob("verilog/*.sv") + ["testbench/computer_TB.sv"]
         args = ["-g2012", "-o", str(build_dir / "tb.out"), "-s", "computer_TB", *src]
 
-        self.proc_cc.readyReadStandardOutput.connect(lambda: self._append_output(self.proc_cc),
-                                                     Qt.ConnectionType.UniqueConnection)
-        self.proc_cc.finished.connect(self._on_compile_done, Qt.ConnectionType.UniqueConnection)
+        self.proc_cc.readyReadStandardOutput.connect(lambda: self._append_output(self.proc_cc), Qt.ConnectionType.AutoConnection)
+        self.proc_cc.finished.connect(self._on_compile_done, Qt.ConnectionType.AutoConnection)
         self.proc_cc.start("iverilog", args)
 
     def _on_compile_done(self):
@@ -152,7 +151,7 @@ class MainWindow(QWidget):
         self.proc_sim.readyReadStandardOutput.connect(lambda: self._append_output(self.proc_sim),
                                                       Qt.ConnectionType.UniqueConnection)
         self.proc_sim.finished.connect(self._on_sim_done, Qt.ConnectionType.UniqueConnection)
-        self.proc_sim.start("vvp", ["-n", "build/tb.out"])
+        self.proc_sim.start("vvp", ["-n", "ROM Programs/build/tb.out"])
 
     def _on_sim_done(self):
         ok = self.proc_sim.exitCode() == 0
