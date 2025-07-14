@@ -1,10 +1,11 @@
 # 8-Bit MicroController Project
 
-A complete 8-bit CPU implementation with custom assembler, Verilog hardware description, and simulation tools.
+A complete 8-bit CPU implementation with GUI interface, custom assembler, Verilog hardware description, and simulation tools.
 
 ## Overview
 
 This project includes:
+- **PyQt6 GUI Application** - User-friendly interface for assembly, simulation, and waveform analysis
 - **Custom 8-bit CPU** implemented in SystemVerilog
 - **Assembly language** with support for loads, stores, branches, and ALU operations
 - **Python assembler** for converting assembly code to binary ROM images
@@ -23,6 +24,7 @@ This project includes:
 │   ├── fibo.bin
 │   └── tb.out
 ├── software/                                     # Development tools
+│   ├── app.py                                   # PyQt6 GUI Application
 │   └── assembler.py                             # Python assembler
 ├── verilog/                                     # Hardware description files
 │   ├── computer.sv                              # Top-level computer module
@@ -43,7 +45,7 @@ This project includes:
 
 Before running this project, ensure you have the following tools installed:
 
-- **Python 3.7+** with the `click` library
+- **Python 3.7+** with PyQt6 and click libraries
 - **Icarus Verilog** (iverilog) for simulation 
 - **GTKWave** for waveform visualization
 *I would recommend using chocolatey to install both Icarus and GTKWave*
@@ -51,16 +53,45 @@ Before running this project, ensure you have the following tools installed:
 
 ### Installing Dependencies
 
+Using Chocolatey (recommended):
+```powershell
+# Install all required packages via Chocolatey
+choco install python iverilog gtkwave
+
+# Install Python dependencies
+pip install PyQt6 click
+```
+
+Manual installation:
 ```bash
 # Install Python dependencies
-pip install click
+pip install PyQt6 click
 
-# Install Icarus and GTKWave (if using choco)
-choco install iverilog
-choco install gtkwave
+# Install Icarus and GTKWave manually from their respective websites
 ```
 
 ## Getting Started
+
+### Quick Start with GUI (Recommended)
+
+The easiest way to use this project is through the graphical interface:
+
+1. **Launch the GUI application:**
+   ```powershell
+   python software/app.py
+   ```
+
+2. **Use the GUI to:**
+   - Select your assembly file (.asm)
+   - Assemble code to binary
+   - Compile and run simulation
+   - View waveforms in GTKWave
+
+The GUI provides a streamlined workflow with visual feedback and integrated console output.
+
+### Command Line Usage (Advanced)
+
+For advanced users or automation, you can still use the command-line tools directly.
 
 ### Step 1: Get Familiar with 8-Bit Assembly
 
@@ -93,16 +124,37 @@ Before writing code, consult the **8-But MightyController Companion Document** (
    SUB             ; Subtract B from A
    ```
 
-### Step 3: Compile Assembly to Binary
+### Step 3: Using the GUI Application
+
+1. **Start the application:**
+   ```powershell
+   python software/app.py
+   ```
+
+2. **Select your assembly file** using the "Select ASM File" button
+
+3. **Assemble your code** using the "Assemble Code" button
+   - This converts your .asm file to a .bin file in the build/ directory
+
+4. **Run simulation** using the "Compile & Simulate" button
+   - Compiles Verilog code and runs the simulation
+   - Generates waves.vcd for waveform analysis
+
+5. **View waveforms** using the "Show Wave Simulation" button
+   - Opens GTKWave with the simulation results
+
+### Alternative: Command Line Workflow
+
+#### Manual Assembly Compilation
 
 Use the Python assembler to convert your assembly code to a binary ROM image:
 
-```bash
+```powershell
 python software/assembler.py assemble asm/[your_code].asm -o build/[output_name].bin
 ```
 
 **Examples:**
-```bash
+```powershell
 # Compile blink demo
 python software/assembler.py assemble asm/blink.asm -o build/blink.bin
 
@@ -113,25 +165,19 @@ python software/assembler.py assemble asm/fibo.asm -o build/fibo.bin
 python software/assembler.py assemble asm/my_program.asm -o build/my_program.bin
 ```
 
-### Step 4: Compile Simulation
+#### Manual Simulation Compilation
 
 Compile the Verilog simulation using Icarus Verilog:
 
-```bash
-iverilog -g2012 -s computer_tb_pro -o build/tb.out verilog/*.sv testbench/computer_TB_advanced.sv
+```powershell
+iverilog -g2012 -s computer_TB -o build/tb.out verilog/*.sv testbench/computer_TB.sv
 ```
 
-**Alternative testbench:**
-```bash
-# Use simple testbench instead
-iverilog -g2012 -s computer_tb_simple -o build/tb.out verilog/*.sv testbench/computer_TB_simple.sv
-```
-
-### Step 5: Run Simulation
+#### Manual Simulation Execution
 
 Execute the compiled simulation:
 
-```bash
+```powershell
 vvp -n build/tb.out
 ```
 
@@ -141,19 +187,24 @@ This will:
 - Generate timing and signal data
 - Create the `waves.vcd` waveform file
 
-### Step 6: Analyze Results
+#### Manual Waveform Analysis
 
 View the simulation waveforms using GTKWave:
 
-```bash
+```powershell
 gtkwave waves.vcd
 ```
 
-In GTKWave, you can:
-- Examine CPU signals (clock, reset, program counter, etc.)
-- View memory contents and register values
-- Analyze instruction execution timing
-- Debug your assembly programs
+## GUI Features
+
+The PyQt6 GUI application (`software/app.py`) provides:
+
+- **File Selection**: Browse and select assembly files with a clean interface
+- **One-Click Assembly**: Convert assembly code to binary with visual feedback
+- **Integrated Simulation**: Compile Verilog and run simulation in one step
+- **Waveform Integration**: Direct launch of GTKWave for signal analysis
+- **Console Output**: Real-time display of all tool outputs and error messages
+- **Status Indicators**: Visual feedback on operation progress and results
 
 ## Sample Programs
 
@@ -191,10 +242,24 @@ Calculates Fibonacci numbers, showcasing arithmetic operations and memory usage.
 
 ### Common Issues
 
-1. **Assembler errors**: Check syntax against the companion document
-2. **Simulation won't start**: Verify all Verilog files are present
-3. **No waveform output**: Ensure simulation completes successfully
-4. **GTKWave won't open**: Check that `waves.vcd` file exists and is not empty
+1. **GUI won't start**: 
+   - Ensure PyQt6 is installed: `pip install PyQt6`
+   - Check Python version (3.7+ required)
+
+2. **Assembler errors**: Check syntax against the companion document
+
+3. **Simulation won't start**: Verify all Verilog files are present and Icarus Verilog is installed
+
+4. **No waveform output**: Ensure simulation completes successfully
+
+5. **GTKWave won't open**: 
+   - Check that `waves.vcd` file exists and is not empty
+   - Verify GTKWave is installed and in PATH
+
+6. **Python package errors**: Install missing dependencies:
+   ```powershell
+   pip install PyQt6 click
+   ```
 
 ### Getting Help
 
@@ -205,13 +270,20 @@ Calculates Fibonacci numbers, showcasing arithmetic operations and memory usage.
 
 ## Development Workflow
 
+### GUI Workflow (Recommended)
+1. **Launch** the GUI: `python software/app.py`
+2. **Plan** your program using the instruction set reference
+3. **Write** assembly code in the `asm/` folder
+4. **Load** your file in the GUI using "Select ASM File"
+5. **Assemble** using the "Assemble Code" button
+6. **Simulate** using the "Compile & Simulate" button
+7. **Debug** using the "Show Wave Simulation" button for GTKWave analysis
+8. **Iterate** until your program works correctly
+
+### Command Line Workflow (Advanced)
 1. **Plan** your program using the instruction set reference
 2. **Write** assembly code in the `asm/` folder
 3. **Assemble** to binary using the Python assembler
 4. **Simulate** using Icarus Verilog
 5. **Debug** using GTKWave waveform analysis
 6. **Iterate** until your program works correctly
-
-## License
-
-This project is for educational purposes. Please refer to individual file headers for specific licensing information.
