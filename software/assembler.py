@@ -26,14 +26,11 @@ from typing import Dict, List, Tuple
 
 import click
 
-# ───────────────────────────────────────────────────────────
-# 1.  ISA description
-# ───────────────────────────────────────────────────────────
-
+# 1.  ISA setup
 @dataclass(frozen=True)
 class Opcode:
     code: int
-    size: int           # bytes (1 or 2)
+    size: int          
     mode: str           # "IMP", "IMM", "DIR", "REL"
 
 def _op(code: int, mode: str) -> Opcode:
@@ -73,20 +70,14 @@ EQU_RE    = re.compile(r"^(\w+)\s+EQU\s+\$([0-9A-Fa-f]{1,2})$")
 class AsmError(RuntimeError):
     pass
 
-# ───────────────────────────────────────────────────────────
 # 2.  Helpers
-# ───────────────────────────────────────────────────────────
-
 def _split_label(line: str) -> Tuple[str | None, str | None]:
     if ':' not in line:
         return None, line.strip() or None
     lab, rest = line.split(':', 1)
     return lab.strip(), rest.strip() or None
 
-# ───────────────────────────────────────────────────────────
 # 3.  Two-pass assembler
-# ───────────────────────────────────────────────────────────
-
 def assemble(lines: List[str]) -> bytes:
     """Convert source lines to a ROM image (byte string)."""
     src = [ln.split(';', 1)[0].rstrip() for ln in lines]  # strip comments
@@ -136,10 +127,7 @@ def assemble(lines: List[str]) -> bytes:
         pc = len(rom)
     return bytes(rom)
 
-# ───────────────────────────────────────────────────────────
 # 4.  Operand classification
-# ───────────────────────────────────────────────────────────
-
 def _determine_mode(mnem: str, ops: List[str], labels: Dict[str, int], line: int):
     """
     Return (addressing_mode, operand_value_or_symbol).
@@ -177,20 +165,14 @@ def _determine_mode(mnem: str, ops: List[str], labels: Dict[str, int], line: int
 
     raise AsmError(f"Line {line}: malformed operand '{token}'")
 
-# ───────────────────────────────────────────────────────────
 # 5.  Lookup helper
-# ───────────────────────────────────────────────────────────
-
 def _lookup(mnem: str, mode: str, *, line: int) -> Opcode:
     key = (mnem.upper(), mode)
     if key not in OPCODES:
         raise AsmError(f"Line {line}: {mnem} does not support {mode} addressing")
     return OPCODES[key]
 
-# ───────────────────────────────────────────────────────────
 # 6.  CLI
-# ───────────────────────────────────────────────────────────
-
 @click.group()
 def cli():
     """8-bit CPU utility suite – assembler only."""
