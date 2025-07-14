@@ -45,6 +45,7 @@ class MainWindow(QWidget):
         # File Selection
         gb_file = QGroupBox("File Selection"); vf = QVBoxLayout(gb_file); vf.setSpacing(20)
         self.file_btn      = self._mk_button("Select ASM File", 45)
+        self.has_file = False 
         self.assemble_btn  = self._mk_button("Assemble Code",   45)
         self.file_label    = QLabel("Please select your ASM (Assembly) file."); self.file_label.setWordWrap(True)
         row = QHBoxLayout(); row.setSpacing(20); row.addWidget(self.file_btn); row.addWidget(self.file_label, 1)
@@ -100,6 +101,7 @@ class MainWindow(QWidget):
     def _select_file(self):
         fn, _ = QFileDialog.getOpenFileName(self, "Select Assembly File", "", "Assembly Files (*.asm);;All Files (*)")
         if fn:
+            self.has_file = True
             self.selected_file = fn
             self.file_name = Path(fn).stem
             self.file_label.setText(f"Selected: {self.file_name}.asm")
@@ -111,7 +113,7 @@ class MainWindow(QWidget):
 
     # Assembling into Binary
     def _run_assemble(self):
-        if not self.selected_file:
+        if self.has_file == False:
             self._info("Warning", "Please select an ASM file first."); return
         self.console.clear()
         out_bin = os.path.join("ROM Programs", "build", f"{self.file_name}.bin"); self._pending_bin = out_bin
@@ -149,16 +151,15 @@ class MainWindow(QWidget):
 
         self._set_status("Running simulation…", "#f39c12")
         self.proc_sim.readyReadStandardOutput.connect(lambda: self._append_output(self.proc_sim),
-                                                      Qt.ConnectionType.UniqueConnection)
-        self.proc_sim.finished.connect(self._on_sim_done, Qt.ConnectionType.UniqueConnection)
+                                                      Qt.ConnectionType.AutoConnection)
+        self.proc_sim.finished.connect(self._on_sim_done, Qt.ConnectionType.AutoConnection)
         self.proc_sim.start("vvp", ["-n", "ROM Programs/build/tb.out"])
 
     def _on_sim_done(self):
-        ok = self.proc_sim.exitCode() == 0
+        ok = (self.proc_sim.exitCode() == 0)
         self._set_status("Simulation OK" if ok else "Simulation failed", "#27ae60" if ok else "#e74c3c")
         if ok:
             self._info("Simulation Complete", "Simulation finished. Use 'Show Wave Simulation' if desired.")
-        self.proc_sim.readyReadStandardOutput.disconnect(); self.proc_sim.finished.disconnect()
 
     # Producing waves simulation
     def _run_wave(self):
