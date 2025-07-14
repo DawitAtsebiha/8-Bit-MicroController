@@ -93,19 +93,7 @@ pip install PyQt6 click
 | `$80-$DF` | RAM (96 bytes) |
 | `$F0-$FF` | I/O Ports (16 bytes) |
 
-## 💻 GUI Features
-
-The **MightyController GUI.py** provides:
-
-- **🎯 One-Click Workflow**: From assembly to simulation in seconds
-- **📂 File Management**: Easy assembly file selection
-- **🔄 Real-time Compilation**: Instant assembler feedback
-- **📊 Integrated Simulation**: Built-in Verilog compilation and execution
-- **🌊 Waveform Analysis**: Direct GTKWave integration
-- **📝 Console Output**: Live tool output and error messages
-- **✅ Status Indicators**: Visual progress and result feedback
-
-## 🎮 Sample Programs
+## Sample Programs
 
 ### Blink Program (`ROM Programs/asm/blink.asm`)
 ```assembly
@@ -120,7 +108,7 @@ loop:
 ### Fibonacci Program (`ROM Programs/asm/fibo.asm`)
 Calculates Fibonacci sequence: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233...
 
-## 🔍 GTKWave Signals
+## GTKWave Signals
 
 When viewing waveforms, look for these key signals:
 
@@ -141,7 +129,7 @@ When viewing waveforms, look for these key signals:
 - `io_data` - I/O data
 - `io_we` - I/O write enable
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
@@ -151,7 +139,7 @@ When viewing waveforms, look for these key signals:
 | No waveform | Ensure simulation completes successfully |
 | GTKWave won't open | Check `waves.vcd` exists and GTKWave is installed |
 
-## 🔄 Development Workflow
+## Development Workflow
 
 ### Using the GUI (Recommended)
 1. **Launch:** `python "MightyController GUI.py"`
@@ -177,13 +165,10 @@ vvp -n "ROM Programs/build/tb.out"
 gtkwave waves.vcd
 ```
 
-## 📚 Documentation
+## Documentation
 
 - **Assembly Reference**: `Documentation/8_But_MightyController_Companion_Document.pdf`
 - **Hardware Schematics**: `Documentation/MicroController Schematics/`
 - **Instruction Set**: See table above
 - **Sample Code**: `ROM Programs/asm/` directory
 
----
-
-**Happy Coding! 🚀** Build amazing programs for your 8-bit MightyController!
