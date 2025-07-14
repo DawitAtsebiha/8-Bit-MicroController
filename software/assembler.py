@@ -1,15 +1,22 @@
-"""assembly.py
-Self‑contained command‑line assembler for the 8‑bit MicroController.
+"""
+assembly.py
+Self-contained command-line assembler for the 8-bit MicroController.
 
 New in this revision
 ────────────────────
-• **Implied‑operand instructions** (`ADD`, `SUB`, `AND`, `OR`, `INC`, `DEC`) now assemble (1‑byte op‑codes).
-• `_classify_operand` recognises the *absence* of an operand when the mnemonic supports `IMP` mode instead of raising "missing operand".
-• Added nicer fallback when pass‑1 errors occur: real line numbers are always reported.
+• Implied-operand instructions (ADD, SUB, AND, OR, INC, DEC) assemble (1-byte op-codes).
+• _determine_mode recognises the *absence* of an operand for IMP mnemonics instead
+  of raising “missing operand”.
+• Pass-1 always reports the real source line number when an error occurs.
+
+Adding soon
+────────────────────
+• Support for more op-codes (e.g. LDX, STX, etc.).
+• Dynamically loading assembled ROM images into the simulator.
 
 Usage
 ─────
-$ python mini8_assembler.py assemble prog.asm -o rom.bin
+$ python assembly.py assemble prog.asm -o rom.bin
 """
 from __future__ import annotations
 
@@ -19,15 +26,15 @@ from typing import Dict, List, Tuple
 
 import click
 
-# ────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────
 # 1.  ISA description
-# ────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class Opcode:
     code: int
-    size: int   # bytes (1 or 2)
-    mode: str   # "IMP", "IMM", "DIR", "REL"
+    size: int           # bytes (1 or 2)
+    mode: str           # "IMP", "IMM", "DIR", "REL"
 
 def _op(code: int, mode: str) -> Opcode:
     return Opcode(code, 1 if mode == "IMP" else 2, mode)
@@ -48,7 +55,7 @@ OPCODES: Dict[Tuple[str, str], Opcode] = {
     ("BNE", "REL"): _op(0x26, "REL"),
     ("BEQ", "REL"): _op(0x27, "REL"),
 
-    # ALU implied‑operand instructions
+    # ALU implied-operand instructions
     ("ADD", "IMP"): _op(0x42, "IMP"),
     ("SUB", "IMP"): _op(0x43, "IMP"),
     ("AND", "IMP"): _op(0x44, "IMP"),
@@ -66,9 +73,9 @@ EQU_RE    = re.compile(r"^(\w+)\s+EQU\s+\$([0-9A-Fa-f]{1,2})$")
 class AsmError(RuntimeError):
     pass
 
-# ────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────
 # 2.  Helpers
-# ────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────
 
 def _split_label(line: str) -> Tuple[str | None, str | None]:
     if ':' not in line:
@@ -76,37 +83,41 @@ def _split_label(line: str) -> Tuple[str | None, str | None]:
     lab, rest = line.split(':', 1)
     return lab.strip(), rest.strip() or None
 
-# ────────────────────────────────────────────────────────────
-# 3.  Two‑pass assembler
-# ────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────
+# 3.  Two-pass assembler
+# ───────────────────────────────────────────────────────────
 
 def assemble(lines: List[str]) -> bytes:
-    """Convert source lines to ROM image (bytes)."""
-    src = [ln.split(';', 1)[0].rstrip() for ln in lines]
+    """Convert source lines to a ROM image (byte string)."""
+    src = [ln.split(';', 1)[0].rstrip() for ln in lines]  # strip comments
 
-    # pass‑1: label + constant table
+    # pass-1: collect labels / constants, compute PC
     labels: Dict[str, int] = {}
     pc = 0
     for line_no, ln in enumerate(src, 1):
         lab, inst = _split_label(ln)
-        # EQU pseudo‑op
+
+        # EQU pseudo-op
         if inst and (m := EQU_RE.match(inst)):
             sym, val = m.group(1), int(m.group(2), 16)
             if sym in labels:
                 raise AsmError(f"Line {line_no}: duplicate symbol '{sym}'")
             labels[sym] = val & 0xFF
             continue
+
         if lab:
             if lab in labels:
                 raise AsmError(f"Line {line_no}: duplicate label '{lab}'")
             labels[lab] = pc
+
         if not inst:
-            continue
+            continue  # blank line or label-only
+
         mnem, *ops = inst.split()
         mode, _ = _determine_mode(mnem, ops, labels, line_no)
         pc += _lookup(mnem, mode, line=line_no).size
 
-    # pass‑2: emit code
+    # pass-2: emit op-codes + operands
     rom: List[int] = []
     pc = 0
     for line_no, ln in enumerate(src, 1):
@@ -117,7 +128,7 @@ def assemble(lines: List[str]) -> bytes:
         mode, op_val = _determine_mode(mnem, ops, labels, line_no)
         opc = _lookup(mnem, mode, line=line_no)
         rom.append(opc.code); pc += 1
-        if mode == "IMM" or mode == "DIR":
+        if mode in {"IMM", "DIR"}:
             rom.append(op_val)
         elif mode == "REL":
             off = (-2 & 0xFF) if op_val == "*" else (labels[op_val] - (pc + 1)) & 0xFF
@@ -125,13 +136,18 @@ def assemble(lines: List[str]) -> bytes:
         pc = len(rom)
     return bytes(rom)
 
-# ────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────
 # 4.  Operand classification
-# ────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────
 
 def _determine_mode(mnem: str, ops: List[str], labels: Dict[str, int], line: int):
-    """Return (mode, value_or_symbol). value is int for IMM/DIR."""
+    """
+    Return (addressing_mode, operand_value_or_symbol).
+    For IMM/DIR the value is an int; for REL it is the symbol (or "*").
+    """
     mnem_u = mnem.upper()
+
+    # implied-operand (no token)
     if not ops:
         if (mnem_u, "IMP") in OPCODES:
             return "IMP", None
@@ -139,58 +155,52 @@ def _determine_mode(mnem: str, ops: List[str], labels: Dict[str, int], line: int
 
     token = ops[0]
 
-    # BRA *  (branch to self)
+    # special: BRA * (branch to current PC)
     if token == "*":
         return "REL", token
 
+    # immediate e.g.  #$3F
     if (m := HEX_IMM.match(token)):
         return "IMM", int(m.group(1), 16)
+
+    # direct e.g.  $80
     if (m := HEX_BYTE.match(token)):
         return "DIR", int(m.group(1), 16)
 
+    # symbol / label
     if LABEL_RE.match(token):
-        if mnem_u in BRANCHES:
+        if mnem_u in BRANCHES:         # relative branch target
             return "REL", token
         if token not in labels:
             raise AsmError(f"Line {line}: unknown symbol '{token}'")
         return "DIR", labels[token]
 
-    raise AsmError(f"Line {line}: malformed operand '{token}'")(f"Line {line}: missing operand")
-
-    token = ops[0]
-
-    if (m := HEX_IMM.match(token)):
-        return "IMM", int(m.group(1), 16)
-    if (m := HEX_BYTE.match(token)):
-        return "DIR", int(m.group(1), 16)
-    if LABEL_RE.match(token):
-        if mnem_u in BRANCHES or token == "*":
-            return "REL", token
-        if token not in labels:
-            raise AsmError(f"Line {line}: unknown symbol '{token}'")
-        return "DIR", labels[token]
     raise AsmError(f"Line {line}: malformed operand '{token}'")
 
+# ───────────────────────────────────────────────────────────
+# 5.  Lookup helper
+# ───────────────────────────────────────────────────────────
 
-def _lookup(mnem: str, mode: str, *, line: int):
+def _lookup(mnem: str, mode: str, *, line: int) -> Opcode:
     key = (mnem.upper(), mode)
     if key not in OPCODES:
         raise AsmError(f"Line {line}: {mnem} does not support {mode} addressing")
     return OPCODES[key]
 
-# ────────────────────────────────────────────────────────────
-# 5.  CLI entry‑points
-# ────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────
+# 6.  CLI
+# ───────────────────────────────────────────────────────────
 
 @click.group()
 def cli():
-    """8‑bit CPU utility suite — assembler only."""
-
+    """8-bit CPU utility suite – assembler only."""
 
 @cli.command("assemble")
 @click.argument("asm_path", type=click.Path(dir_okay=False, exists=True))
-@click.option("--out", "-o", default="rom.bin", show_default=True, help="Output ROM binary")
+@click.option("--out", "-o", default="rom.bin", show_default=True,
+              help="Output ROM binary")
 def assemble_cmd(asm_path: str, out: str):
+    """Assemble ASM_PATH into a raw ROM image."""
     lines = pathlib.Path(asm_path).read_text(encoding="utf-8").splitlines()
     try:
         rom = assemble(lines)
@@ -198,8 +208,7 @@ def assemble_cmd(asm_path: str, out: str):
         click.echo(f"Assembler error: {e}", err=True)
         sys.exit(1)
     pathlib.Path(out).write_bytes(rom)
-    click.echo(f"[assembler] wrote {len(rom)} bytes → {out}")
-
+    click.echo(f"[assembler] wrote {len(rom)} bytes -> {out}")   # plain ASCII arrow
 
 if __name__ == "__main__":
     cli()
