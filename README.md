@@ -180,13 +180,15 @@ When viewing waveforms, look for these key signals:
 
 | Problem | Solution |
 |---------|----------|
-| GUI won't start | Install PyQt6: `pip install PyQt6` |
+| GUI won't start | Ensure that PyQt6 is installed: `pip install PyQt6` |
 | Assembly errors | Check syntax in companion document |
 | Simulation fails | Verify Icarus Verilog installation |
 | No waveform | Ensure simulation completes successfully |
-| GTKWave won't open | Check `waves.vcd` exists and GTKWave is installed |
+| GTKWave won't open | Check that `waves.vcd` exists and GTKWave is installed |
 
 ## Development Workflow
+
+#### Please note that it currently is not possible to have your written programs loaded into the ROM dynamically, you would need to write it into the testbench (computer_TB) to have it be run, ***this is being worked on*** 
 
 ### Using the GUI (Recommended)
 1. **Launch:** `python "MightyController GUI.py"`
