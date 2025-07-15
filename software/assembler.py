@@ -57,8 +57,10 @@ OPCODES: Dict[Tuple[str, str], Opcode] = {
     ("SUB", "IMP"): _op(0x43, "IMP"),
     ("AND", "IMP"): _op(0x44, "IMP"),
     ("OR",  "IMP"): _op(0x45, "IMP"),
-    ("INC", "IMP"): _op(0x46, "IMP"),
-    ("DEC", "IMP"): _op(0x48, "IMP"),
+    ("INCA", "IMP"): _op(0x46, "IMP"),
+    ("INCB", "IMP"): _op(0x47, "IMP"),
+    ("DECA", "IMP"): _op(0x48, "IMP"),
+    ("DECB", "IMP"): _op(0x49, "IMP"),
 }
 
 # regex helpers
