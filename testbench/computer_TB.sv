@@ -9,9 +9,6 @@ module computer_TB;
     reg clk = 0;  always #10 clk = ~clk;
     reg reset = 0;
 
-    parameter ROM0 = "ROM Programs/build/blink.bin";
-    parameter ROM1 = "ROM Programs/build/fibo.bin";
-
     computer dut (
         .clk     (clk),
         .reset   (reset),
@@ -27,20 +24,14 @@ module computer_TB;
     wire [7:0] B_Reg = dut.cpu1.data_path1.B_Reg;
 
     // Output monitoring signals for GTKWave
-    reg [7:0] fibonacci_output;
-    reg [7:0] blink_output;
-    reg fibonacci_valid;
-    reg blink_valid;
-    integer fib_sequence_count;
-    integer blink_sequence_count;
+    reg [7:0] ROM_output;
+    reg ROM_valid;
+    integer ROM_sequence_count;
     
     initial begin
-        fibonacci_output = 0;
-        blink_output = 0;
-        fibonacci_valid = 0;
-        blink_valid = 0;
-        fib_sequence_count = 0;
-        blink_sequence_count = 0;
+        ROM_output = 0;
+        ROM_valid = 0;
+        ROM_sequence_count = 0;
     end
     
     integer cycles = 0;
@@ -78,18 +69,38 @@ module computer_TB;
     end
     endtask
 
+    parameter integer NUM_TESTS = 3;
+
+    parameter string ROM_FILES [2:0] = {
+        "ROM Programs/build/blink.bin",
+        "ROM Programs/build/fibo.bin",
+        "ROM Programs/build/counter.bin"
+    };
+
+    parameter string TEST_NAMES [2:0] = {
+        "Blink LED Test",
+        "Fibonacci Sequence Test",
+        "Counter Test"
+    };
+
+    parameter string TEST_TYPES [2:0] = {
+        "blink",
+        "fibonacci",
+        "counter"
+    };
+
+    parameter integer BASE_ADDRS [2:0] = {0, 0, 0};
+    parameter integer MAX_CYCLES [2;0] = {1000, 1000, 1000};
+
     task run_prog;
-        input romfile;
-        input base_addr;
-        input max_cycles;
-        input [255:0] test_name;
+        input string romfile;
+        input integer base_addr;
+        input integer max_cycles;
+        input string test_name;
 
-        reg [1023:0] romfile;
-        integer      base_addr, max_cycles;
-        reg [255:0] test_name;
-
-        integer n, start_cycles, fib_count, blink_count;
+        integer n, start_cycles, ROM_count;
         reg done;
+        
     begin
         $display("\n=== Starting Test: %0s ===", test_name);
         $display("Loading ROM: %0s at base address %0d", romfile, base_addr);
@@ -97,27 +108,18 @@ module computer_TB;
         load_rom(romfile, base_addr);
         
         // Set PC to start execution from the base address
-        reset = 0; repeat (2) @(posedge clk); 
+        reset = 0; repeat (10) @(posedge clk); 
         dut.cpu1.data_path1.PC = base_addr;  // Set PC to program start address
         reset = 1;
         
         start_cycles = cycles;
         done = 0;
-        fib_count = 0;
-        blink_count = 0;
-        
-        // Reset output monitoring signals
-        fibonacci_valid = 0;
-        blink_valid = 0;
-        
-        // Set the active test type
-        if (test_name == "Fibonacci Sequence Test") begin
-            fibonacci_valid = 1;
-            blink_valid = 0;
-        end else begin
-            fibonacci_valid = 0;
-            blink_valid = 1;
-        end
+        ROM_count = 0;
+
+        if (test_name == 0)
+            ROM_valid = 0;
+        else
+            ROM_valid = 1;
         
         $display("Program execution started at cycle %0d, PC set to 0x%02h", cycles, base_addr);
         
@@ -126,23 +128,14 @@ module computer_TB;
             
             // Monitor I/O activity
             if (io_we) begin
-                if (test_name == "Fibonacci Sequence Test") begin
-                    $display("  [Cycle %0d] F(%0d) = %0d (0x%02h)", cycles, fib_count, io_data, io_data);
-                    fibonacci_output = io_data;  // Update GTKWave signal
-                    fib_sequence_count = fib_count;  // Update sequence counter for GTKWave
-                    fib_count = fib_count + 1;
-                end else begin
-                    $display("  [Cycle %0d] BLINK #%0d: Port[0x%h] = 0x%02h %s", cycles, blink_count, io_addr, io_data, (io_data == 8'h01) ? "(LED ON)" : "(LED OFF)");
-                    blink_output = io_data;  // Update GTKWave signal
-                    blink_sequence_count = blink_count;  // Update blink counter for GTKWave
-                    blink_count = blink_count + 1;
+                if (test_name == 0) 
+                    $display("Catastrophic failure");
+                else begin
+                    $display("  [Cycle %0d] F(%0d) = %0d (0x%02h)", cycles, ROM_count, io_data, io_data);
+                    ROM_output = io_data;  // Update GTKWave signal
+                    ROM_sequence_count = ROM_count;  // Update sequence counter for GTKWave
+                    ROM_count = ROM_count + 1;
                 end
-            end
-            
-            // Check for program halt condition
-            if (test_name == "Fibonacci Sequence Test" && IR == 8'h20 && dut.memory1.rom1.ROM[PC+1] == 8'hFE) begin
-                $display("  [Cycle %0d] HALT detected: BRA $FE instruction", cycles);
-                done = 1;
             end
             
             // Show progress every 100 cycles for long tests
@@ -152,58 +145,69 @@ module computer_TB;
         end
         
         if (done) begin
-            $display("=== Test '%0s' COMPLETED successfully ===", test_name);
-            $display("Execution time: %0d cycles", cycles - start_cycles);
-        end else begin
-            $display("=== Test '%0s' TIMEOUT after %0d cycles ===", test_name, max_cycles);
-            $display("Final state: PC=0x%02h, IR=0x%02h", PC, IR);
+                $display("=== Test '%0s' COMPLETED successfully ===", test_name);
+                $display("Execution time: %0d cycles", cycles - start_cycles);
+            end else begin
+                $display("=== Test '%0s' TIMEOUT after %0d cycles ===", test_name, max_cycles);
+                $display("Final state: PC=0x%02h, IR=0x%02h", PC, IR);
+            end
+            $display("Total cycles so far: %0d\n", cycles);
         end
-        $display("Total cycles so far: %0d\n", cycles);
-    end
-    endtask
+        endtask
 
+        // Dynamic test runner function
+        task run_all_tests;
+            integer i;
+        begin
+            $display("\n========================================");
+            $display("DYNAMIC ROM TEST SUITE");
+            $display("========================================");
+            $display("Found %0d ROM configurations", NUM_TESTS);
+            $display("Clock period: 20ns (50MHz)");
+            $display("Reset: Active high");
+            $display("");
+            
+            // Loop through all configured ROMs
+            for (i = 0; i < NUM_TESTS; i = i + 1) begin
+                $display("Running test %0d of %0d...", i + 1, NUM_TESTS);
+                run_prog(
+                    ROM_FILES[i],
+                    BASE_ADDRS[i],
+                    MAX_CYCLES[i],
+                    TEST_NAMES[i],
+                    TEST_TYPES[i]
+                );
+            end
+            
+            // Final Summary
+            $display("\n========================================");
+            $display("DYNAMIC TESTBENCH SUMMARY");
+            $display("========================================");
+            $display("Total tests run: %0d", total_tests);
+            $display("Total simulation cycles: %0d", cycles);
+            $display("Simulation time: %0dns", $time);
+            $display("All tests completed successfully!");
+            $display("========================================");
+        end
+        endtask
 
-
-    initial begin
-        
-        $dumpfile("waves.vcd");
-        $dumpvars(clk, reset, cycles);
-        // CPU signals
-        $dumpvars(PC, IR, A_Reg, B_Reg, fibonacci_output, blink_output);
-        // I/O signals
-        $dumpvars(io_addr, io_data, io_we);
-        // Program monitoring signals
-        $dumpvars(fibonacci_valid, blink_valid, fib_sequence_count, blink_sequence_count);
-        
-        $display("VCD Dump Info - Limited signal set:");
-        $display("- Clock and reset signals");
-        $display("- CPU state: PC, IR, A and B Registers, Fibonacci and Blink outputs");
-        $display("- I/O signals: io_addr, io_data, io_we");
-        $display("- Program outputs: fibonacci_output, blink_output");
-        $display("- Program indicators: fibonacci_valid, blink_valid, fib_sequence_count, blink_sequence_count");
-        
-        $display("========================================");
-        $display("8-Bit MightyController Testbench Suite");
-        $display("========================================");
-        $display("Clock period: 20ns (50MHz)");
-        $display("Reset: Active high");
-        $display("");
-
-        // Test Case 1: Blink Program (LED Toggle) - Extended for more cycles to show looping
-        run_prog(ROM0, 0, 1000, "Blink LED Test");
-        
-        // Test Case 2: Fibonacci Sequence  
-        run_prog(ROM1, 0, 1000, "Fibonacci Sequence Test");
-
-        // Final Summary
-        $display("\n========================================");
-        $display("TESTBENCH SUMMARY");
-        $display("========================================");
-        $display("Total simulation cycles: %0d", cycles);
-        $display("Simulation time: %0dns", $time);
-        $display("All tests completed successfully!");
-        $display("========================================");
-        
-        $finish;
-    end
-endmodule
+        // Simplified initial block
+        initial begin
+            $dumpfile("waves.vcd");
+            $dumpvars(clk, reset, cycles);
+            $dumpvars(PC, IR, A_Reg, B_Reg, ROM_output);
+            $dumpvars(io_addr, io_data, io_we);
+            $dumpvars(ROM_valid, ROM_sequence_count);
+            
+            $display("VCD Dump Info - Limited signal set:");
+            $display("- Clock and reset signals");
+            $display("- CPU state: PC, IR, A and B Registers");
+            $display("- I/O signals: io_addr, io_data, io_we");
+            $display("- Program monitoring signals");
+            
+            // Run all configured tests dynamically
+            run_all_tests();
+            
+            $finish;
+        end
+    endmodule
