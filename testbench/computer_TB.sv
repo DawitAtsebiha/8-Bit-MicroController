@@ -45,81 +45,64 @@ module computer_TB;
         end
     end
 
-    task load_rom;                 // old-style header
-        input filename;
-        input base_addr;
-
-        reg [1023:0] filename;
-        reg [7:0] bytes;
-
-        integer fd, idx, base_addr, tmp;
-    begin
-        fd = $fopen(filename,"rb");
-        if (!fd) begin
-            $display("ERROR: cannot open %0s", filename);
-            $finish;
+        task load_rom;
+            input [8*64-1:0] filename;
+            reg   [7:0]      data_byte;
+            integer          fd, idx;
+        begin
+            fd = $fopen(filename, "rb");
+            if (fd == 0) begin
+                $display("ERROR: could not open ROM file %0s", filename);
+                $finish;
+            end
+            idx = 0;
+            while (!$feof(fd)) begin
+                $fread(data_byte, fd);
+                dut.memory1.rom1.ROM[idx] = data_byte;
+                idx = idx + 1;
+            end
+            $fclose(fd);
         end
-        idx = base_addr;
-        while (!$feof(fd)) begin
-            tmp = $fread(bytes, fd);
-            dut.memory1.rom1.ROM[idx] = bytes;
-            idx = idx + 1;
-        end
-        $fclose(fd);
-    end
-    endtask
+        endtask
 
     parameter integer NUM_TESTS = 3;
 
-    parameter string ROM_FILES [2:0] = {
-        "ROM Programs/build/blink.bin",
-        "ROM Programs/build/fibo.bin",
-        "ROM Programs/build/counter.bin"
-    };
+    parameter [8*64-1:0] ROM_FILE0   = "ROM Programs/build/blink.bin";
+    parameter [8*64-1:0] ROM_FILE1   = "ROM Programs/build/fibo.bin";
+    parameter [8*64-1:0] ROM_FILE2   = "ROM Programs/build/counter.bin";
 
-    parameter string TEST_NAMES [2:0] = {
-        "Blink LED Test",
-        "Fibonacci Sequence Test",
-        "Counter Test"
-    };
+    // each test name max 32 chars
+    parameter [8*32-1:0] TEST_NAME0  = "Blink LED Test";
+    parameter [8*32-1:0] TEST_NAME1  = "Fibonacci Sequence Test";
+    parameter [8*32-1:0] TEST_NAME2  = "Counter Test";
 
-    parameter string TEST_TYPES [2:0] = {
-        "blink",
-        "fibonacci",
-        "counter"
-    };
-
-    parameter integer BASE_ADDRS [2:0] = {0, 0, 0};
-    parameter integer MAX_CYCLES [2;0] = {1000, 1000, 1000};
+    // each test type max 16 chars
+    parameter [8*16-1:0] TEST_TYPE0  = "blink";
+    parameter [8*16-1:0] TEST_TYPE1  = "fibonacci";
+parameter [8*16-1:0] TEST_TYPE2  = "counter";
 
     task run_prog;
-        input string romfile;
-        input integer base_addr;
-        input integer max_cycles;
-        input string test_name;
-
-        integer n, start_cycles, ROM_count;
-        reg done;
-        
+        input [8*64-1:0] romfile;
+        input integer    base_addr;
+        input integer    max_cycles;
+        input [8*32-1:0] test_name;
+        input [8*16-1:0] test_type;
+        integer          n, start_cycles, ROM_count;
+        reg              done;
     begin
         $display("\n=== Starting Test: %0s ===", test_name);
-        $display("Loading ROM: %0s at base address %0d", romfile, base_addr);
-        
-        load_rom(romfile, base_addr);
-        
-        // Set PC to start execution from the base address
-        reset = 0; repeat (10) @(posedge clk); 
-        dut.cpu1.data_path1.PC = base_addr;  // Set PC to program start address
+        $display("Loading ROM: %0s", romfile);
+
+        load_rom(romfile);
+
+        reset = 0; repeat (10) @(posedge clk);
+        dut.cpu1.data_path1.PC = base_addr;
         reset = 1;
-        
+
         start_cycles = cycles;
         done = 0;
         ROM_count = 0;
-
-        if (test_name == 0)
-            ROM_valid = 0;
-        else
-            ROM_valid = 1;
+        ROM_valid = (test_name != {8*32{1'b0}});
         
         $display("Program execution started at cycle %0d, PC set to 0x%02h", cycles, base_addr);
         
@@ -152,12 +135,16 @@ module computer_TB;
                 $display("Final state: PC=0x%02h, IR=0x%02h", PC, IR);
             end
             $display("Total cycles so far: %0d\n", cycles);
-        end
-        endtask
+    end
+    endtask
 
         // Dynamic test runner function
         task run_all_tests;
             integer i;
+            reg [8*64-1:0] romfile;
+            reg [8*32-1:0] test_name;
+            reg [8*16-1:0] test_type;
+
         begin
             $display("\n========================================");
             $display("DYNAMIC ROM TEST SUITE");
@@ -166,31 +153,34 @@ module computer_TB;
             $display("Clock period: 20ns (50MHz)");
             $display("Reset: Active high");
             $display("");
-            
+        end
             // Loop through all configured ROMs
-            for (i = 0; i < NUM_TESTS; i = i + 1) begin
-                $display("Running test %0d of %0d...", i + 1, NUM_TESTS);
-                run_prog(
-                    ROM_FILES[i],
-                    BASE_ADDRS[i],
-                    MAX_CYCLES[i],
-                    TEST_NAMES[i],
-                    TEST_TYPES[i]
-                );
+        for (i = 0; i < NUM_TESTS; i = i + 1) begin
+
+            case (i)
+            0: begin
+                romfile    = ROM_FILE0;   test_name = TEST_NAME0;  test_type = TEST_TYPE0;         
+            end
+            1: begin
+                romfile    = ROM_FILE1;   test_name = TEST_NAME1;  test_type = TEST_TYPE1;
+            end
+            2: begin
+                romfile    = ROM_FILE2;   test_name = TEST_NAME2;  test_type = TEST_TYPE2;
+                end
+
+            default: begin
+                romfile    = {8*64{1'b0}};
+                test_name  = {8*32{1'b0}};
+                test_type  = {8*16{1'b0}};
+                ROM_valid  = 1;
+                end
+            endcase
+
+            $display("Running test %0d/%0d: %0s", i+1, NUM_TESTS, test_name);
+            run_prog(romfile, 0, 1000, test_name, test_type);
             end
             
-            // Final Summary
-            $display("\n========================================");
-            $display("DYNAMIC TESTBENCH SUMMARY");
-            $display("========================================");
-            $display("Total tests run: %0d", total_tests);
-            $display("Total simulation cycles: %0d", cycles);
-            $display("Simulation time: %0dns", $time);
-            $display("All tests completed successfully!");
-            $display("========================================");
-        end
-        endtask
-
+    endtask
         // Simplified initial block
         initial begin
             $dumpfile("waves.vcd");
