@@ -26,8 +26,8 @@ module data_path(
     
     // ALU instantiation
     ALU alu1 (
-        .A(B_Reg),
-        .B(BUS1),
+        .A(BUS1),
+        .B(B_Reg),
         .ALU_Sel(ALU_Sel),
         .NZVC(CCR_in),
         .Result(ALU_Result)
