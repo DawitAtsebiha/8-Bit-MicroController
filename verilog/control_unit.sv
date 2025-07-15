@@ -107,22 +107,22 @@ module control_unit (
                 end
             end
 
-			LoadStore3 : begin     // put data on BUS1, no write yet
+			LoadStore3 : begin          // put data on BUS1, no write yet
 				if (IR==8'h96)      
 					Bus1_Sel = 2'b01;   // A-reg
 				else                
-                Bus1_Sel = 2'b10;   // B-reg
+                Bus1_Sel = 2'b10;       // B-reg
 				
-                next = LoadStore4;                      // wait one clk
+                next = LoadStore4;     // wait one clk
 			end
 
-			LoadStore4 : begin     // data/address already stable
+			LoadStore4 : begin         // data/address already stable
 				if (IR==8'h96)      
-			    	Bus1_Sel = 2'b01;   // KEEP SAME SOURCE
+			    	Bus1_Sel = 2'b01;  // KEEP SAME SOURCE
 				else
 					Bus1_Sel = 2'b10;
 				
-                write = 1;                             // pulse write
+                write = 1;             // pulse write
 				next  = Fetch0;
 			end
 
@@ -131,40 +131,33 @@ module control_unit (
                 Bus1_Sel = 2'b01;
                 Bus2_Sel = 2'b00;
                 A_Load = 1;
+                B_Load = 0;
 
-                if (IR == 8'h42) begin
-                    ALU_Sel = 3'b000;
-                end
-                else if (IR == 8'h43) begin
-                    ALU_Sel = 3'b001;
-                end
-                else if (IR == 8'h44) begin
-                    ALU_Sel = 3'b010;
-                end
-                else if (IR == 8'h45) begin
-                    ALU_Sel = 3'b011;
-                end
-                else if (IR == 8'h46) begin
-                    ALU_Sel = 3'b100;
-                end
-                else if (IR == 8'h47) begin
-                    ALU_Sel = 3'b100;
-                    Bus1_Sel = 2'b10;
-                    A_Load = 0;
-                    B_Load = 1;
-                end
-                else if (IR == 8'h48) begin
-                    ALU_Sel = 3'b101;
-                end
-                else if (IR == 8'h49) begin
-                    ALU_Sel = 3'b101;
-                    Bus1_Sel = 2'b10;
-                    A_Load = 0;
-                    B_Load = 1;
-                end
-                else begin
-                    ALU_Sel = 3'b000;
-                end
+                case(IR)
+                    8'h42: ALU_Sel = 3'b000; // ADD
+                    8'h43: ALU_Sel = 3'b001; // SUB
+                    8'h44: ALU_Sel = 3'b010; // AND
+                    8'h45: ALU_Sel = 3'b011; // OR
+                    8'h46: ALU_Sel = 3'b100; // INCA
+
+                    8'h47: begin
+                        ALU_Sel = 3'b100; // INCB
+                        Bus1_Sel = 2'b10; 
+                        A_Load = 0;
+                        B_Load = 1;       
+                    end
+
+                    8'h48: ALU_Sel = 3'b101; // DECA
+
+                    8'h49: begin
+                        ALU_Sel = 3'b101; // DECB
+                        Bus1_Sel = 2'b10;  
+                        A_Load = 0;
+                        B_Load = 1;       
+                    end
+                    default: ALU_Sel = 3'b000; // Default to ADD
+                endcase
+
                 next = Fetch0;
             end
 
@@ -182,33 +175,40 @@ module control_unit (
 
             Branch2: begin
                 Bus2_Sel = 2'b10;
-                if (IR == 8'h20) begin
-                    PC_Load = 1;
-                end
-                else if (IR == 8'h21) begin
-                    if (CCR_Result[3]) PC_Load = 1;
-                end
-                else if (IR == 8'h22) begin
-                    if (!CCR_Result[3]) PC_Load = 1;
-                end
-                else if (IR == 8'h23) begin
-                    if (CCR_Result[2]) PC_Load = 1;
-                end
-                else if (IR == 8'h24) begin
-                    if (!CCR_Result[2]) PC_Load = 1;
-                end
-                else if (IR == 8'h25) begin
-                    if (CCR_Result[1]) PC_Load = 1;
-                end
-                else if (IR == 8'h26) begin
-                    if (!CCR_Result[1]) PC_Load = 1;
-                end
-                else if (IR == 8'h27) begin
-                    if (CCR_Result[0]) PC_Load = 1;
-                end
-                else if (IR == 8'h28) begin
-                    if (!CCR_Result[0]) PC_Load = 1;
-                end
+
+                case(IR)
+                    8'h20: begin // BRA
+                        PC_Load = 1;
+                    end
+                    8'h21: begin // BCC
+                        if (CCR_Result[3]) PC_Load = 1; // Carry Clear
+                    end
+                    8'h22: begin // BCS
+                        if (!CCR_Result[3]) PC_Load = 1; // Carry Set
+                    end
+                    8'h23: begin // BNE
+                        if (CCR_Result[2]) PC_Load = 1; // Not Equal
+                    end
+                    8'h24: begin // BEQ
+                        if (!CCR_Result[2]) PC_Load = 1; // Equal
+                    end
+                    8'h25: begin // BPL
+                        if (CCR_Result[1]) PC_Load = 1; // Positive
+                    end
+                    8'h26: begin // BMI
+                        if (!CCR_Result[1]) PC_Load = 1; // Negative
+                    end
+                    8'h27: begin // BVC
+                        if (CCR_Result[0]) PC_Load = 1; // Overflow Clear
+                    end
+                    8'h28: begin // BVS
+                        if (!CCR_Result[0]) PC_Load = 1; // Overflow Set
+                    end
+                    default: begin
+                        PC_Load = 0; // No branch
+                    end
+                endcase
+                
                 next = Fetch0;
             end
 
