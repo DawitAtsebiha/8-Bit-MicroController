@@ -31,8 +31,8 @@ module control_unit (
 
     // Instruction decoding logic - moved outside the main state machine
     always @* begin
-        LoadStoreOP = (IR == 8'h86) || (IR == 8'h87) || (IR == 8'h88) || 
-                      (IR == 8'h89) || (IR == 8'h96) || (IR == 8'h97);
+        LoadStoreOP = (IR == 8'h86) || (IR == 8'hB6) || (IR == 8'h88) || 
+                      (IR == 8'hB7) || (IR == 8'h96) || (IR == 8'h97);
         
         DataOP = (IR == 8'h42) || (IR == 8'h43) || (IR == 8'h44) || (IR == 8'h45) || 
                  (IR == 8'h46) || (IR == 8'h47) || (IR == 8'h48) || (IR == 8'h49);
@@ -46,7 +46,7 @@ module control_unit (
         // Defaults
         next = state;
         {IR_Load, MAR_Load, PC_Load, PC_Inc, A_Load, B_Load, 
-         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, write} = 11'b0;
+         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, write} = 15'b0;
 
         case(state)
             Fetch0: begin
@@ -187,10 +187,10 @@ module control_unit (
                         if (!CCR_Result[3]) PC_Load = 1; // Carry Set
                     end
                     8'h23: begin // BNE
-                        if (CCR_Result[2]) PC_Load = 1; // Not Equal
+                        if (!CCR_Result[2]) PC_Load = 1; // Not Equal
                     end
                     8'h24: begin // BEQ
-                        if (!CCR_Result[2]) PC_Load = 1; // Equal
+                        if (CCR_Result[2]) PC_Load = 1; // Equal
                     end
                     8'h25: begin // BPL
                         if (CCR_Result[1]) PC_Load = 1; // Positive
