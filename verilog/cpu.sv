@@ -15,7 +15,7 @@ module cpu(
     wire        PC_Inc;
     wire        A_Load;
     wire        B_Load;
-    wire [2:0]  ALU_Sel;
+    wire [3:0]  ALU_Sel;
     wire [3:0]  CCR_Result;
     wire        CCR_Load;
     wire [1:0]  Bus2_Sel;
