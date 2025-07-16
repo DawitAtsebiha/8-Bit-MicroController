@@ -46,29 +46,29 @@ module ALU(
                 NZVC[2] = (Result == 0);                         // Zero
             end
 
-            // Logical NOT(A)
-            4'd4: Result = !A;
-
-            // Logical NOT(B)
-            4'd5: Result = !B;
-
             // Bitwise AND
-            4'd6: Result = A & B; // ADD FLAGS AFTER TESTING
+            4'd4: begin
+                Result = A & B;
+                NZVC[3] = Result[7];     // Negative
+                NZVC[2] = (Result == 0); // Zero
+            end
 
             // Bitwise OR
-            4'd7: Result = A | B; // ADD FLAGS AFTER TESTING
-
-            // Bitwise NOT(A)
-            4'd8: Result = ~A;
-
-            // Bitwise NOT(B)
-            4'd9: Result = ~B;
+            4'd5: begin
+                Result = A | B;
+                NZVC[3] = Result[7];     // Negative
+                NZVC[2] = (Result == 0); // Zero
+            end
 
             // XOR
-            4'd10: Result = A ^ B; // ADD FLAGS AFTER TESTING
+            4'd6: begin
+                Result = A ^ B;
+                NZVC[3] = Result[7];     // Negative
+                NZVC[2] = (Result == 0); // Zero
+            end
             
             // INC (A + 1)
-            4'd11: begin
+            4'd7: begin
                 temp = {1'b0, A} + 9'b1;
                 Result = temp[7:0];
                 NZVC[3] = Result[7];                            // Negative
@@ -76,14 +76,31 @@ module ALU(
                 NZVC[1] = (A == 8'h7F);                         // Overflow
                 NZVC[0] = temp[8];                              // Carry
             end
-            
+            // INC (B + 1)
+            4'd8: begin
+                temp = {1'b0, B} + 9'b1;
+                Result = temp[7:0];
+                NZVC[3] = Result[7];                            // Negative
+                NZVC[2] = (Result == 0);                         // Zero
+                NZVC[1] = (B == 8'h7F);                         // Overflow
+                NZVC[0] = temp[8];                              // Carry
+            end
             // DEC (A - 1)
-            4'd12: begin
+            4'd9: begin
                 temp = {1'b0, A} - 9'b1;
                 Result = temp[7:0];
                 NZVC[3] = Result[7];                            // Negative
                 NZVC[2] = (Result == 0);                         // Zero
                 NZVC[1] = (A == 8'h80);                         // Overflow
+                NZVC[0] = temp[8];                              // Borrow
+            end           
+            // DEC (B - 1)
+            4'd10: begin
+                temp = {1'b0, B} - 9'b1;
+                Result = temp[7:0];
+                NZVC[3] = Result[7];                            // Negative
+                NZVC[2] = (Result == 0);                         // Zero
+                NZVC[1] = (B == 8'h80);                         // Overflow
                 NZVC[0] = temp[8];                              // Borrow
             end
             
