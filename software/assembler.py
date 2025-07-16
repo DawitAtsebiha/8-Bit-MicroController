@@ -49,18 +49,21 @@ OPCODES: Dict[Tuple[str, str], Opcode] = {
 
     # Branches (relative)
     ("BRA", "REL"): _op(0x20, "REL"),
-    ("BNE", "REL"): _op(0x26, "REL"),
-    ("BEQ", "REL"): _op(0x27, "REL"),
+    ("BNE", "REL"): _op(0x23, "REL"),
+    ("BEQ", "REL"): _op(0x24, "REL"),
 
     # ALU implied-operand instructions
     ("ADD", "IMP"): _op(0x42, "IMP"),
     ("SUB", "IMP"): _op(0x43, "IMP"),
-    ("AND", "IMP"): _op(0x44, "IMP"),
-    ("OR",  "IMP"): _op(0x45, "IMP"),
-    ("INCA", "IMP"): _op(0x46, "IMP"),
-    ("INCB", "IMP"): _op(0x47, "IMP"),
-    ("DECA", "IMP"): _op(0x48, "IMP"),
-    ("DECB", "IMP"): _op(0x49, "IMP"),
+    ("LAND", "IMP"): _op(0x44, "IMP"),
+    ("LOR",  "IMP"): _op(0x45, "IMP"),
+    ("BAND", "IMP"): _op(0x46, "IMP"),
+    ("BOR",  "IMP"): _op(0x47, "IMP"),    
+    ("XOR", "IMP"): _op(0x48, "IMP"),
+    ("INCA", "IMP"): _op(0x49, "IMP"),
+    ("INCB", "IMP"): _op(0x50, "IMP"),
+    ("DECA", "IMP"): _op(0x51, "IMP"),
+    ("DECB", "IMP"): _op(0x52, "IMP"),
 }
 
 # regex helpers
