@@ -9,7 +9,7 @@ module data_path(
     input PC_Inc,
     input A_Load,
     input B_Load,
-    input [2:0] ALU_Sel,
+    input [3:0] ALU_Sel,
     output reg [3:0] CCR_Result,
     input CCR_Load,
     input [1:0] Bus2_Sel,
