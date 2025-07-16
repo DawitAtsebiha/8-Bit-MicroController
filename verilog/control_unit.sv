@@ -134,28 +134,32 @@ module control_unit (
                 B_Load = 0;
 
                 case(IR)
-                    8'h42: ALU_Sel = 3'b000; // ADD
-                    8'h43: ALU_Sel = 3'b001; // SUB
-                    8'h44: ALU_Sel = 3'b010; // AND
-                    8'h45: ALU_Sel = 3'b011; // OR
-                    8'h46: ALU_Sel = 3'b100; // INCA
+                    8'h42: ALU_Sel = 4'd0; // ADD
+                    8'h43: ALU_Sel = 4'd1; // SUB
+                    8'h44: ALU_Sel = 4'd2; // Logical AND
+                    8'h45: ALU_Sel = 4'd3; // Logical OR
+                    8'h46: ALU_Sel = 4'd6; // Bitwise AND
+                    8'h47: ALU_Sel = 4'd7; // Bitwise OR
+                    8'h48: ALU_Sel = 4'd8; // XOR
 
-                    8'h47: begin
-                        ALU_Sel = 3'b100; // INCB
+                    8'h49: ALU_Sel = 4'd9; // INC A
+
+                    8'h50: begin
+                        ALU_Sel = 4'd9; // INCB
                         Bus1_Sel = 2'b10; 
                         A_Load = 0;
                         B_Load = 1;       
                     end
 
-                    8'h48: ALU_Sel = 3'b101; // DECA
+                    8'h51: ALU_Sel = 4'd10; // DECA
 
-                    8'h49: begin
-                        ALU_Sel = 3'b101; // DECB
+                    8'h52: begin
+                        ALU_Sel = 4'd10; // DECB
                         Bus1_Sel = 2'b10;  
                         A_Load = 0;
                         B_Load = 1;       
                     end
-                    default: ALU_Sel = 3'b000; // Default to ADD
+                    default: ALU_Sel = 4'd0; // Default to ADD
                 endcase
 
                 next = Fetch0;
