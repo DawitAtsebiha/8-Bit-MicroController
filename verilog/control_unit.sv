@@ -9,7 +9,7 @@ module control_unit (
     output reg PC_Inc,
     output reg A_Load,
     output reg B_Load,
-    output reg [2:0] ALU_Sel,
+    output reg [3:0] ALU_Sel,
     output reg CCR_Load,
     output reg [1:0] Bus2_Sel,
     output reg [1:0] Bus1_Sel,
@@ -31,22 +31,27 @@ module control_unit (
 
     // Instruction decoding logic - moved outside the main state machine
     always @* begin
-        LoadStoreOP = (IR == 8'h86) || (IR == 8'hB6) || (IR == 8'h88) || 
-                      (IR == 8'hB7) || (IR == 8'h96) || (IR == 8'h97);
-        
-        DataOP = (IR == 8'h42) || (IR == 8'h43) || (IR == 8'h44) || (IR == 8'h45) || 
-                 (IR == 8'h46) || (IR == 8'h47) || (IR == 8'h48) || (IR == 8'h49);
-        
-        BranchOP = (IR == 8'h20) || (IR == 8'h21) || (IR == 8'h22) || (IR == 8'h23) || 
-                   (IR == 8'h24) || (IR == 8'h25) || (IR == 8'h26) || (IR == 8'h27) || 
-                   (IR == 8'h28);
+        LoadStoreOP = 0;
+        DataOP = 0;
+        BranchOP = 0;
+
+        case(IR)
+            // LoadStore operations
+            8'h86, 8'hB6, 8'h88, 8'hB7, 8'h96, 8'h97: LoadStoreOP = 1;
+            
+            // Data operations
+            8'h42, 8'h43, 8'h44, 8'h45, 8'h46, 8'h47, 8'h48, 8'h49, 8'h50, 8'h51, 8'h52: DataOP = 1;
+            
+            // Branch operations
+            8'h20, 8'h21, 8'h22, 8'h23, 8'h24, 8'h25, 8'h26, 8'h27, 8'h28: BranchOP = 1;
+        endcase
     end
 
     always @* begin
         // Defaults
         next = state;
         {IR_Load, MAR_Load, PC_Load, PC_Inc, A_Load, B_Load, 
-         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, write} = 15'b0;
+         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, write} = 16'b0;
 
         case(state)
             Fetch0: begin
@@ -97,7 +102,7 @@ module control_unit (
                     B_Load = 1; 
                     next = Fetch0; 
                 end
-                else if ((IR == 8'h87) || (IR == 8'h89) || (IR == 8'h96) || (IR == 8'h97)) begin
+                else if ((IR == 8'h96) || (IR == 8'h97)) begin
                     Bus2_Sel = 2'b10;
                     MAR_Load = 1;
                     next = LoadStore3;
@@ -107,22 +112,36 @@ module control_unit (
                 end
             end
 
-			LoadStore3 : begin          // put data on BUS1, no write yet
-				if (IR==8'h96)      
-					Bus1_Sel = 2'b01;   // A-reg
-				else                
-                Bus1_Sel = 2'b10;       // B-reg
+			LoadStore3 : begin          
+				case (IR)     
+                    8'h96: Bus1_Sel = 2'b01; // A Reg for STAA
+                    8'h97: Bus1_Sel = 2'b10; // B for STAB
+                    8'hB6, 8'hB7: Bus1_Sel = 2'b00; // LDA and LDAB direct (loading, not storing)
+                endcase			              
 				
-                next = LoadStore4;     // wait one clk
+                next = LoadStore4;   
 			end
 
-			LoadStore4 : begin         // data/address already stable
-				if (IR==8'h96)      
-			    	Bus1_Sel = 2'b01;  // KEEP SAME SOURCE
-				else
-					Bus1_Sel = 2'b10;
-				
-                write = 1;             // pulse write
+			LoadStore4 : begin     
+				case(IR) 
+			    	8'h96: begin
+                        Bus1_Sel = 2'b01;
+                        write = 1;
+                    end
+                    8'h97: begin
+                        Bus1_Sel = 2'b10;
+                        write = 1;
+                    end
+                    8'hB6: begin
+                        Bus2_Sel = 2'b10;
+                        A_Load = 1;
+                    end
+                    8'hB7: begin
+                        Bus2_Sel = 2'b10;
+                        B_Load = 1;
+                    end
+                endcase
+
 				next  = Fetch0;
 			end
 
@@ -138,20 +157,20 @@ module control_unit (
                     8'h43: ALU_Sel = 4'd1; // SUB
                     8'h44: ALU_Sel = 4'd2; // Logical AND
                     8'h45: ALU_Sel = 4'd3; // Logical OR
-                    8'h46: ALU_Sel = 4'd6; // Bitwise AND
-                    8'h47: ALU_Sel = 4'd7; // Bitwise OR
-                    8'h48: ALU_Sel = 4'd8; // XOR
+                    8'h46: ALU_Sel = 4'd4; // Bitwise AND
+                    8'h47: ALU_Sel = 4'd5; // Bitwise OR
+                    8'h48: ALU_Sel = 4'd6; // XOR
 
-                    8'h49: ALU_Sel = 4'd9; // INC A
+                    8'h49: ALU_Sel = 4'd7; // INC A
 
                     8'h50: begin
-                        ALU_Sel = 4'd9; // INCB
+                        ALU_Sel = 4'd8; // INCB
                         Bus1_Sel = 2'b10; 
                         A_Load = 0;
                         B_Load = 1;       
                     end
 
-                    8'h51: ALU_Sel = 4'd10; // DECA
+                    8'h51: ALU_Sel = 4'd9; // DECA
 
                     8'h52: begin
                         ALU_Sel = 4'd10; // DECB
