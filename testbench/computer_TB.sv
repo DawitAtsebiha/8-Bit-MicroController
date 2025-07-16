@@ -48,7 +48,7 @@ module computer_TB;
         task load_rom;
             input [8*64-1:0] filename;
             reg   [7:0]      data_byte;
-            integer          fd, idx;
+            integer          fd, idx, bytes_read;
         begin
             fd = $fopen(filename, "rb");
             if (fd == 0) begin
@@ -57,9 +57,11 @@ module computer_TB;
             end
             idx = 0;
             while (!$feof(fd)) begin
-                $fread(data_byte, fd);
-                dut.memory1.rom1.ROM[idx] = data_byte;
-                idx = idx + 1;
+                bytes_read = $fread(data_byte, fd);
+                if (bytes_read > 0) begin
+                    dut.memory1.rom1.ROM[idx] = data_byte;
+                    idx = idx + 1;
+                end
             end
             $fclose(fd);
         end
