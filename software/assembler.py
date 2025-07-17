@@ -164,7 +164,7 @@ def _determine_mode(mnem: str, ops: List[str], labels: Dict[str, int], line: int
     if not ops:
         if (mnem_u, "IMP") in OPCODES:
             return "IMP", None
-        raise AsmError(f"Line {line}: missing operand NIGGER")
+        raise AsmError(f"Line {line}: missing operand")
 
     token = ops[0]
 
