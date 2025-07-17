@@ -37,7 +37,6 @@ module memory (
     
     // Write to output ports
     always @(posedge clk, negedge reset) begin
-		  integer i;
         if (!reset) begin
             for (i = 0; i < 16; i = i + 1)
                 output_ports[i] <= 8'h00;

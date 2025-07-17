@@ -10,10 +10,11 @@ module rw_96x8_sync (
     reg [7:0] RAM [0:95];
     
     // Initialize RAM
+    integer i;
     initial begin
         RAM[0] = 8'h33;
         RAM[1] = 8'h22;
-        for (int i = 2; i < 96; i++) begin
+        for (i = 2; i < 96; i = i + 1) begin
             RAM[i] = 8'h00;
         end
     end
