@@ -9,20 +9,23 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("8-But MightyController - Assembly & Simulation Tool")
-        self.resize(1200, 800)
+        self.resize(1400, 900)  # Increased default size
+        self.setMinimumSize(1200, 700)  # Set minimum size to prevent crushing
         self.setStyleSheet(self._get_styles())
         
         # Main layout
         main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(10, 10, 10, 10)  # Reduced margins
+        main_layout.setSpacing(10)
         
         splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter)
         
         splitter.addWidget(self._create_left_panel())
         splitter.addWidget(self._create_right_panel())
-        splitter.setSizes([450, 750])
+        splitter.setSizes([500, 900])  # Better proportions
+        splitter.setStretchFactor(0, 0)  # Left panel doesn't stretch
+        splitter.setStretchFactor(1, 1)  # Right panel stretches
         
         # Initialize
         self.has_file = False
@@ -137,26 +140,23 @@ class MainWindow(QWidget):
                 border-radius: 8px;
                 font-size: 14px;
                 border: none;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #ecf0f1, stop:1 #bdc3c7);
+                background: rgba(236, 240, 241, 0.3);  /* Light transparent gray */
+                color: #2c3e50;
             }
             #status[class="success"] {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #d5f4e6, stop:1 #27ae60);
-                color: #27ae60;
-                border: 2px solid #27ae60;
+                background: rgba(213, 244, 230, 0.4);  /* Light transparent green */
+                color: #1e8449;  /* Darker green for better contrast */
+                border: 1px solid rgba(39, 174, 96, 0.3);
             }
             #status[class="error"] {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #f8d7da, stop:1 #e74c3c);
-                color: #e74c3c;
-                border: 2px solid #e74c3c;
+                background: rgba(248, 215, 218, 0.4);  /* Light transparent red */
+                color: #c0392b;  /* Darker red for better contrast */
+                border: 1px solid rgba(231, 76, 60, 0.3);
             }
             #status[class="working"] {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #fff3cd, stop:1 #f39c12);
-                color: #f39c12;
-                border: 2px solid #f39c12;
+                background: rgba(255, 243, 205, 0.4);  /* Light transparent orange */
+                color: #d68910;  /* Darker orange for better contrast */
+                border: 1px solid rgba(243, 156, 18, 0.3);
             }
             #title { 
                 color: #2c3e50; 
@@ -202,12 +202,14 @@ class MainWindow(QWidget):
             }
             QCheckBox {
                 color: #2c3e50;
-                font-size: 12px;
-                spacing: 5px;
+                font-size: 13px;  /* Slightly larger font */
+                spacing: 6px;     /* More spacing */
+                min-height: 22px; /* Bigger minimum height */
+                padding: 2px;     /* Add some padding */
             }
             QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
+                width: 18px;      /* Bigger checkbox */
+                height: 18px;
                 border: 2px solid #3498db;
                 border-radius: 3px;
                 background: white;
@@ -217,13 +219,18 @@ class MainWindow(QWidget):
                 image: none;
                 border: 2px solid #2980b9;
             }
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
         """
 
     def _create_left_panel(self):
         panel = QFrame()
-        panel.setMaximumWidth(480)
+        panel.setMinimumWidth(450)  
+        panel.setMaximumWidth(600)  # Maximum width to prevent over-expansion
         layout = QVBoxLayout(panel)
-        layout.setSpacing(15)
+        layout.setSpacing(12)  # Reduced spacing
 
         # Header
         title = QLabel("8-But MightyController")
@@ -240,11 +247,12 @@ class MainWindow(QWidget):
         # File Selection
         file_group = QGroupBox("File Selection")
         file_layout = QVBoxLayout(file_group)
+        file_layout.setSpacing(8)  
         
         # New file selection
         new_file_row = QHBoxLayout()
         self.file_btn = QPushButton("Select ASM File")
-        self.file_btn.setFixedHeight(40)
+        self.file_btn.setFixedHeight(35) 
         self.file_label = QLabel("No file selected")
         self.file_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.file_label.setObjectName("fileStatus")
@@ -262,9 +270,9 @@ class MainWindow(QWidget):
         existing_row = QHBoxLayout()
         existing_row.addWidget(QLabel("Quick Run:"))
         self.existing_combo = QComboBox()
-        self.existing_combo.setFixedHeight(35)
+        self.existing_combo.setFixedHeight(30)  
         self.quick_run_btn = QPushButton("Run")
-        self.quick_run_btn.setFixedSize(100, 35)
+        self.quick_run_btn.setFixedSize(80, 30) 
         self.quick_run_btn.setEnabled(True)
         existing_row.addWidget(self.existing_combo, 1)
         existing_row.addWidget(self.quick_run_btn)
@@ -275,18 +283,18 @@ class MainWindow(QWidget):
         # Actions
         actions_group = QGroupBox("Actions")
         actions_layout = QVBoxLayout(actions_group)
-        actions_layout.setSpacing(12)
+        actions_layout.setSpacing(8) 
         
         self.assemble_btn = QPushButton("Assemble Code")
-        self.assemble_btn.setFixedHeight(45)
+        self.assemble_btn.setFixedHeight(35) 
         self.assemble_btn.setEnabled(False)
         
         self.simulate_btn = QPushButton("Compile & Simulate")
-        self.simulate_btn.setFixedHeight(45)
+        self.simulate_btn.setFixedHeight(35)
         self.simulate_btn.setEnabled(False)
         
         self.wave_btn = QPushButton("Show Waveforms")
-        self.wave_btn.setFixedHeight(45)
+        self.wave_btn.setFixedHeight(35)
         self.wave_btn.setEnabled(False)
 
         actions_layout.addWidget(self.assemble_btn)
@@ -297,20 +305,49 @@ class MainWindow(QWidget):
         # Debug Options
         debug_group = QGroupBox("Debug Options")
         debug_layout = QVBoxLayout(debug_group)
-        debug_layout.setSpacing(8)
+        debug_layout.setSpacing(8)  
         
-        # Cycle count setting
-        cycle_row = QHBoxLayout()
-        cycle_row.addWidget(QLabel("Max Cycles:"))
+        # Top row: Max Cycles and Presets
+        top_row = QHBoxLayout()
+        
+        # Max Cycles section (left side)
+        cycles_section = QHBoxLayout()
+        cycles_section.addWidget(QLabel("Max Cycles:"))
         self.cycle_spin = QSpinBox()
         self.cycle_spin.setRange(100, 50000)
         self.cycle_spin.setValue(1000)
         self.cycle_spin.setSingleStep(100)
-        cycle_row.addWidget(self.cycle_spin)
-        debug_layout.addLayout(cycle_row)
+        self.cycle_spin.setFixedHeight(28) 
+        self.cycle_spin.setMinimumWidth(100)
+        cycles_section.addWidget(self.cycle_spin)
+        cycles_section.addStretch()
         
-        # Debug checkboxes in a grid
+        # Presets section (right side)
+        presets_section = QHBoxLayout()
+        presets_section.addWidget(QLabel("Presets:"))
+        
+        self.preset_none_btn = QPushButton("None")
+        self.preset_full_btn = QPushButton("Full")
+        
+        # Smaller preset buttons
+        for btn in [self.preset_none_btn, self.preset_full_btn]:
+            btn.setFixedHeight(28)
+            btn.setMinimumWidth(90)
+            btn.setMaximumWidth(90)
+        
+        presets_section.addWidget(self.preset_none_btn)
+        presets_section.addWidget(self.preset_full_btn)
+        
+        # Add both sections to top row
+        top_row.addLayout(cycles_section)
+        top_row.addSpacing(20)  # Add some space between sections
+        top_row.addLayout(presets_section)
+        
+        debug_layout.addLayout(top_row)
+        
+        # Debug checkboxes in a grid (now with more space)
         debug_checks_layout = QGridLayout()
+        debug_checks_layout.setSpacing(6)  # Increased spacing for bigger checkboxes
         
         self.debug_enable = QCheckBox("Enable Debug")
         self.debug_pc = QCheckBox("Show PC")
@@ -324,7 +361,7 @@ class MainWindow(QWidget):
         # Set defaults
         self.debug_io.setChecked(True)  # I/O debugging on by default
         
-        # Arrange in 2 columns
+        # Arrange in 2 columns with better sizing
         debug_checks_layout.addWidget(self.debug_enable, 0, 0)
         debug_checks_layout.addWidget(self.debug_pc, 0, 1)
         debug_checks_layout.addWidget(self.debug_ir, 1, 0)
@@ -334,23 +371,11 @@ class MainWindow(QWidget):
         debug_checks_layout.addWidget(self.debug_state, 3, 0)
         debug_checks_layout.addWidget(self.debug_verbose, 3, 1)
         
+        # Set column stretch to distribute evenly
+        debug_checks_layout.setColumnStretch(0, 1)
+        debug_checks_layout.setColumnStretch(1, 1)
+        
         debug_layout.addLayout(debug_checks_layout)
-        
-        # Quick debug presets
-        preset_row = QHBoxLayout()
-        self.preset_none_btn = QPushButton("None")
-        self.preset_basic_btn = QPushButton("Basic")
-        self.preset_full_btn = QPushButton("Full")
-        
-        self.preset_none_btn.setFixedHeight(30)
-        self.preset_basic_btn.setFixedHeight(30)
-        self.preset_full_btn.setFixedHeight(30)
-        
-        preset_row.addWidget(QLabel("Presets:"))
-        preset_row.addWidget(self.preset_none_btn)
-        preset_row.addWidget(self.preset_basic_btn)
-        preset_row.addWidget(self.preset_full_btn)
-        debug_layout.addLayout(preset_row)
         
         layout.addWidget(debug_group)
 
@@ -358,9 +383,10 @@ class MainWindow(QWidget):
         self.status_label = QLabel()
         self.status_label.setObjectName("status")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setMaximumHeight(40) 
         layout.addWidget(self.status_label)
 
-        layout.addStretch()
+        layout.addStretch()  # Add stretch at the bottom
         return panel
 
     def _create_right_panel(self):
@@ -406,7 +432,6 @@ class MainWindow(QWidget):
         
         # Debug preset connections
         self.preset_none_btn.clicked.connect(self._preset_none)
-        self.preset_basic_btn.clicked.connect(self._preset_basic)
         self.preset_full_btn.clicked.connect(self._preset_full)
         
         # Verbose mode auto-enables all debug options
@@ -440,17 +465,6 @@ class MainWindow(QWidget):
         self.debug_enable.setChecked(False)
         self.debug_pc.setChecked(False)
         self.debug_ir.setChecked(False)
-        self.debug_regs.setChecked(False)
-        self.debug_mem.setChecked(False)
-        self.debug_io.setChecked(False)
-        self.debug_state.setChecked(False)
-        self.debug_verbose.setChecked(False)
-
-    def _preset_basic(self):
-        """Enable basic debug options"""
-        self.debug_enable.setChecked(True)
-        self.debug_pc.setChecked(True)
-        self.debug_ir.setChecked(True)
         self.debug_regs.setChecked(False)
         self.debug_mem.setChecked(False)
         self.debug_io.setChecked(True)
@@ -512,7 +526,7 @@ class MainWindow(QWidget):
 
     def _select_file(self):
         file, _ = QFileDialog.getOpenFileName(
-            self, "Select Assembly File", "ROM Programs/asm", "Assembly Files (*.asm)"
+            self, "Select Assembly File", "ROM Programs/asm", "Assembly Files (*.asm);;Text Files (*.txt);;All Files (*)"
         )
         if file:
             self.has_file = True
