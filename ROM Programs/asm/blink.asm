@@ -1,8 +1,7 @@
-        LDA  #$01      ; Load pattern 1 (LED on)
+        LDA  #$00      ; Load pattern 1 (LED OFF)
 loop:
-        STAA $F0       ; Output to LED port (on)
+        STAA $F0       ; Output to LED port
         LDA  #$01      ; Reload A (creates a delay cycle)
-        LDA  #$00     
         STAA $F0       
         LDA  #$00   
         BRA  loop      ; Continue blinking until simulation is terminated
