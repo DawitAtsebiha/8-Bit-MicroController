@@ -185,51 +185,55 @@ module control_unit (
             end
 
             Branch0: begin
-                Bus1_Sel = 2'b00;
-                Bus2_Sel = 2'b01;
-                MAR_Load = 1;
+                Bus1_Sel = 2'b00;  // PC (pointing to offset) on Bus1
+                Bus2_Sel = 2'b01;  // Bus1 on Bus2
+                MAR_Load = 1;      // Load offset address into MAR
                 next = Branch1;
             end
 
             Branch1: begin
-                PC_Inc = 1;
+                Bus2_Sel = 2'b10;  // from_memory on Bus2  
+                B_Load = 1;        // Load offset into B_Reg
+                PC_Inc = 1;        // Increment PC to point after instruction
                 next = Branch2;
             end
 
             Branch2: begin
-                Bus2_Sel = 2'b10;
+                Bus1_Sel = 2'b00;  // PC on Bus1
+                Bus2_Sel = 2'b00;  // ALU_Result on Bus2
+                ALU_Sel = 4'd0;    // ADD operation (PC + offset)
 
                 case(IR)
-                    8'h20: begin // BRA
-                        PC_Load = 1;
-                    end
+                    8'h20: PC_Load = 1; // BRA
                     8'h21: begin // BCC
-                        if (CCR_Result[3]) PC_Load = 1; // Carry Clear
+                        if (!CCR_Result[0]) PC_Load = 1; // Carry Clear
                     end
                     8'h22: begin // BCS
-                        if (!CCR_Result[3]) PC_Load = 1; // Carry Set
+                        if (CCR_Result[0]) PC_Load = 1; // Carry Set
                     end
                     8'h23: begin // BNE
                         if (!CCR_Result[2]) PC_Load = 1; // Not Equal
                     end
                     8'h24: begin // BEQ
-                        if (CCR_Result[2]) PC_Load = 1; // Equal
+                        if (CCR_Result[2]) begin
+                            PC_Load = 1; // Equal
+                            // display("[DEBUG] BEQ instruction, Z flag=%b at time %0t", 
+                            // CCR_Result[2], $time);
+                        end
                     end
                     8'h25: begin // BPL
-                        if (CCR_Result[1]) PC_Load = 1; // Positive
+                        if (!CCR_Result[3]) PC_Load = 1; // Positive
                     end
                     8'h26: begin // BMI
-                        if (!CCR_Result[1]) PC_Load = 1; // Negative
+                        if (CCR_Result[3]) PC_Load = 1; // Negative
                     end
                     8'h27: begin // BVC
-                        if (CCR_Result[0]) PC_Load = 1; // Overflow Clear
+                        if (!CCR_Result[1]) PC_Load = 1; // Overflow Clear
                     end
                     8'h28: begin // BVS
-                        if (!CCR_Result[0]) PC_Load = 1; // Overflow Set
+                        if (CCR_Result[1]) PC_Load = 1; // Overflow Set
                     end
-                    default: begin
-                        PC_Load = 0; // No branch
-                    end
+                    default: PC_Load = 0; // No branch
                 endcase
                 
                 next = Fetch0;
