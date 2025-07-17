@@ -602,36 +602,27 @@ class MainWindow(QWidget):
         ]
         
         # Add debug flags based on checkboxes
+        debug_flags = [
+            (self.debug_pc,      "+DEBUG_PC",      "PC"),
+            (self.debug_ir,      "+DEBUG_IR",      "IR"),
+            (self.debug_regs,    "+DEBUG_REGS",    "Registers"),
+            (self.debug_mem,     "+DEBUG_MEM",     "Memory"),
+            (self.debug_io,      "+DEBUG_IO",      "I/O"),
+            (self.debug_state,   "+DEBUG_STATE",   "State"),
+        ]
+
         if self.debug_enable.isChecked():
-            sim_args.append("+DEBUG")
-        if self.debug_pc.isChecked():
-            sim_args.append("+DEBUG_PC")
-        if self.debug_ir.isChecked():
-            sim_args.append("+DEBUG_IR")
-        if self.debug_regs.isChecked():
-            sim_args.append("+DEBUG_REGS")
-        if self.debug_mem.isChecked():
-            sim_args.append("+DEBUG_MEM")
-        if self.debug_io.isChecked():
-            sim_args.append("+DEBUG_IO")
-        if self.debug_state.isChecked():
-            sim_args.append("+DEBUG_STATE")
-        if self.debug_verbose.isChecked():
+            sim_args.append("+DEBUG")                                      # master switch
+            sim_args.extend(flag for cb, flag, _ in debug_flags if cb.isChecked())
+
+        if self.debug_verbose.isChecked():                                 # verbose is independent
             sim_args.append("+DEBUG_VERBOSE")
-        
-        # Log the debug configuration
-        active_debug = []
+
         if self.debug_enable.isChecked() or self.debug_verbose.isChecked():
-            if self.debug_pc.isChecked(): active_debug.append("PC")
-            if self.debug_ir.isChecked(): active_debug.append("IR")
-            if self.debug_regs.isChecked(): active_debug.append("Registers")
-            if self.debug_mem.isChecked(): active_debug.append("Memory")
-            if self.debug_io.isChecked(): active_debug.append("I/O")
-            if self.debug_state.isChecked(): active_debug.append("State")
-            if self.debug_verbose.isChecked(): active_debug.append("Verbose")
-            
-            if active_debug:
-                self._log(f"🔍 Debug enabled: {', '.join(active_debug)}")
+            active = [label for cb, _, label in debug_flags if cb.isChecked()]
+            if self.debug_verbose.isChecked():
+                active.append("Verbose")
+            self._log(f"🔍 Debug enabled: {', '.join(active)}")
             
         self._log(f"⏱️ Max cycles: {self.cycle_spin.value()}")
         
