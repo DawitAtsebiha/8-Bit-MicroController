@@ -45,20 +45,36 @@ module data_path(
         end
         else begin
             if (IR_Load) IR_Reg <= BUS2;
-            if (MAR_Load) MAR <= BUS2;
+            if (MAR_Load) begin
+                MAR <= BUS2;
+                // $display("[DEBUG] MAR_Load: MAR=%h, BUS2=%h at time %0t", MAR, BUS2, $time);
+            end
             
-            if (PC_Load) PC <= BUS2;
+            if (PC_Load) begin 
+                if (Bus2_Sel == 2'b10)
+                    PC <= PC + from_memory;
+                else begin
+                    PC <= BUS2;
+                    // $display("[DEBUG] PC_Load: PC=%h, BUS2=%h, ALU_Result=%h, BUS1=%h, B_Reg=%h at time %0t", 
+                    //          PC, BUS2, ALU_Result, BUS1, B_Reg, $time);
+                end
+            end
             else if (PC_Inc) PC <= PC + 1'b1;
             
             if (A_Load) A_Reg <= BUS2;
-            if (B_Load) B_Reg <= BUS2;
-            if (CCR_Load) CCR <= CCR_in;
+            if (B_Load) begin
+                B_Reg <= BUS2;
+                // $display("[DEBUG] B_Load: B_Reg=%h, BUS2=%h, from_memory=%h at time %0t", 
+                //          B_Reg, BUS2, from_memory, $time);
+            end
+            if (CCR_Load) begin
+                CCR <= CCR_in;
+                // $display("[DEBUG] Updating CCR to %b at time %0t", CCR_in, $time);
+            end
         end
     end
     
-    // Bus assignments (combinational)
     always @* begin
-        // Bus1 selection FIRST to prevent warning
         case(Bus1_Sel)
             2'b00: BUS1 = PC;
             2'b01: BUS1 = A_Reg;
@@ -66,7 +82,6 @@ module data_path(
             default: BUS1 = 8'b0;
         endcase
         
-        // Bus2 selection
         case(Bus2_Sel)
             2'b00: BUS2 = ALU_Result;
             2'b01: BUS2 = BUS1;
@@ -74,7 +89,6 @@ module data_path(
             default: BUS2 = 8'b0;
         endcase
         
-        // Output assignments
         IR = IR_Reg;
         address = MAR;
         to_memory = BUS1;
