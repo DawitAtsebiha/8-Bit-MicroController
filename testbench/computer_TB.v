@@ -36,23 +36,23 @@ module computer_TB;
     
     integer cycles = 0;
     
-    // Monitor for enhanced debugging
-    always @(posedge clk) begin
-        if (reset && debug_enable && cycles >= debug_start_cycle && 
-           (debug_end_cycle == -1 || cycles <= debug_end_cycle)) begin
-            
-            // Build debug message
-            $write("[Cycle %0d] ", cycles);
-            
-            if (debug_pc) $write("PC=0x%02h ", PC);
-            if (debug_ir) $write("IR=0x%02h ", IR);
-            if (debug_regs) $write("A=0x%02h B=0x%02h ", A_Reg, B_Reg);
-            if (debug_state) $write("State=%0d ", dut.cpu1.control_unit1.state);
-            
-            // Always show if anything was printed
-            if (debug_pc || debug_ir || debug_regs || debug_state) $write("\n");
-        end
-    end
+    // Monitor for enhanced debugging (moved to test loop)
+    // always @(posedge clk) begin
+    //     if (!reset && debug_enable && cycles >= debug_start_cycle && 
+    //        (debug_end_cycle == -1 || cycles <= debug_end_cycle)) begin
+    //         
+    //         // Build debug message
+    //         $write("[Cycle %0d] ", cycles);
+    //         
+    //         if (debug_pc) $write("PC=0x%02h ", PC);
+    //         if (debug_ir) $write("IR=0x%02h ", IR);
+    //         if (debug_regs) $write("A=0x%02h B=0x%02h ", A_Reg, B_Reg);
+    //         if (debug_state) $write("State=%0d ", dut.cpu1.control_unit1.state);
+    //         
+    //         // Always show if anything was printed
+    //         if (debug_pc || debug_ir || debug_regs || debug_state) $write("\n");
+    //     end
+    // end
 
         task load_rom;
             input [8*64-1:0] filename;
@@ -79,9 +79,9 @@ module computer_TB;
     // Dynamic ROM file loading
     reg [8*128-1:0] dynamic_rom_file;
     reg [8*64-1:0] dynamic_test_name;
+    reg integer debug_cycles = 1000;      // Default to 1000 cycles if not specified
     
     // Enhanced debugging parameters
-    integer debug_cycles = 1000;           // Configurable cycle count
     reg     debug_enable = 0;              // Enable/disable debug output
     reg     debug_pc = 0;                  // Show Program Counter
     reg     debug_ir = 0;                  // Show Instruction Register
@@ -111,6 +111,8 @@ module computer_TB;
         // Parse debug configuration parameters
         if ($value$plusargs("CYCLES=%d", debug_cycles)) begin
             $display("Debug cycles set to: %0d", debug_cycles);
+        end else begin
+            $display("Using default cycles: %0d", debug_cycles);
         end
         
         if ($test$plusargs("DEBUG")) begin
@@ -161,8 +163,7 @@ module computer_TB;
         if ($value$plusargs("DEBUG_END=%d", debug_end_cycle)) begin
             $display("Debug output ends at cycle: %0d", debug_end_cycle);
         end
-            dynamic_test_name = "Dynamic Test";
-        end
+    end
 
     task run_prog;
         input [8*64-1:0] romfile;
@@ -192,17 +193,27 @@ module computer_TB;
         for (n = 0; n < max_cycles && !done; n = n + 1) begin
             @(posedge clk); cycles = cycles + 1;
             
+            // Debug monitoring for PC, IR, Registers, State
+            if (debug_enable && cycles >= debug_start_cycle && 
+               (debug_end_cycle == -1 || cycles <= debug_end_cycle)) begin
+                
+                if (debug_pc || debug_ir || debug_regs || debug_state) begin
+                    $write("  [Cycle %0d] ", cycles);
+                    if (debug_pc) $write("PC=0x%02h ", PC);
+                    if (debug_ir) $write("IR=0x%02h ", IR);
+                    if (debug_regs) $write("A=0x%02h B=0x%02h ", A_Reg, B_Reg);
+                    if (debug_state) $write("State=%0d ", dut.cpu1.control_unit1.state);
+                    $write("\n");
+                end
+            end
+            
             // Enhanced I/O monitoring
             if (io_we) begin
                 if (test_name == 0) 
                     $display("Catastrophic failure");
                 else begin
-                    if (debug_io || debug_verbose) begin
-                        $display("  [Cycle %0d] I/O Write: F(%0d) = %0d (0x%02h) | PC=0x%02h", 
-                                cycles, ROM_count, io_data, io_data, PC);
-                    end else begin
-                        $display("  [Cycle %0d] F(%0d) = %0d (0x%02h)", cycles, ROM_count, io_data, io_data);
-                    end
+                    $display("  [Cycle %0d] F(%0d) = %0d (0x%02h)", cycles, ROM_count, io_data, io_data);
+                    
                     ROM_output = io_data;  // Update GTKWave signal
                     ROM_sequence_count = ROM_count;  // Update sequence counter for GTKWave
                     ROM_count = ROM_count + 1;
@@ -210,14 +221,9 @@ module computer_TB;
             end
             
             // Memory access debugging
-            if (debug_mem && (dut.cpu1.memory1.we || dut.cpu1.memory1.oe)) begin
-                if (dut.cpu1.memory1.we) begin
-                    $display("  [Cycle %0d] MEM Write: Addr=0x%02h Data=0x%02h", 
-                            cycles, dut.cpu1.memory1.addr, dut.cpu1.memory1.data_in);
-                end else if (dut.cpu1.memory1.oe) begin
-                    $display("  [Cycle %0d] MEM Read: Addr=0x%02h Data=0x%02h", 
-                            cycles, dut.cpu1.memory1.addr, dut.cpu1.memory1.data_out);
-                end
+            if (debug_mem && dut.memory1.write) begin
+                $display("  [Cycle %0d] MEM Write: Addr=0x%02h Data=0x%02h", 
+                        cycles, dut.memory1.address, dut.memory1.data_in);
             end
             
             // Show progress every 100 cycles for long tests
@@ -244,12 +250,7 @@ module computer_TB;
             $dumpvars(PC, IR, A_Reg, B_Reg, ROM_output);
             $dumpvars(io_addr, io_data, io_we);
             $dumpvars(ROM_valid, ROM_sequence_count);
-            
-            $display("VCD Dump Info - Limited signal set:");
-            $display("- Clock and reset signals");
-            $display("- CPU state: PC, IR, A and B Registers");
-            $display("- I/O signals: io_addr, io_data, io_we");
-            $display("- Program monitoring signals");
+
             
             // Run the dynamic test
             run_dynamic_test();
