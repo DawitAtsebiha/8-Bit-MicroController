@@ -67,21 +67,25 @@ module computer_TB;
         end
         endtask
 
-    parameter integer NUM_TESTS = 3;
-
-    parameter [8*64-1:0] ROM_FILE0   = "ROM Programs/build/blink.bin";
-    parameter [8*64-1:0] ROM_FILE1   = "ROM Programs/build/fibo.bin";
-    parameter [8*64-1:0] ROM_FILE2   = "ROM Programs/build/counter.bin";
-
-    // each test name max 32 chars
-    parameter [8*32-1:0] TEST_NAME0  = "Blink LED Test";
-    parameter [8*32-1:0] TEST_NAME1  = "Fibonacci Sequence Test";
-    parameter [8*32-1:0] TEST_NAME2  = "Counter Test";
-
-    // each test type max 16 chars
-    parameter [8*16-1:0] TEST_TYPE0  = "blink";
-    parameter [8*16-1:0] TEST_TYPE1  = "fibonacci";
-parameter [8*16-1:0] TEST_TYPE2  = "counter";
+    // Dynamic ROM file loading
+    reg [8*128-1:0] dynamic_rom_file;
+    reg [8*64-1:0] dynamic_test_name;
+    
+    // Default to a simple test if no file specified
+    initial begin
+        if ($value$plusargs("ROMFILE=%s", dynamic_rom_file)) begin
+            $display("Loading dynamic ROM file: %0s", dynamic_rom_file);
+        end else begin
+            dynamic_rom_file = "ROM Programs/build/counter.bin";
+            $display("No ROM file specified, using default: %0s", dynamic_rom_file);
+        end
+        
+        if ($value$plusargs("TESTNAME=%s", dynamic_test_name)) begin
+            $display("Test name: %0s", dynamic_test_name);
+        end else begin
+            dynamic_test_name = "Dynamic Test";
+        end
+    end
 
     task run_prog;
         input [8*64-1:0] romfile;
@@ -124,9 +128,9 @@ parameter [8*16-1:0] TEST_TYPE2  = "counter";
             end
             
             // Show progress every 100 cycles for long tests
-            if (n > 0 && n % 100 == 0) begin
-                $display("  [Cycle %0d] PC=0x%02h, IR=0x%02h - Still running...", cycles, PC, IR);
-            end
+           // if (n > 0 && n % 100 == 0) begin
+           //     $display("  [Cycle %0d] PC=0x%02h, IR=0x%02h - Still running...", cycles, PC, IR);
+           // end
         end
         
         if (done) begin
@@ -140,49 +144,6 @@ parameter [8*16-1:0] TEST_TYPE2  = "counter";
     end
     endtask
 
-        // Dynamic test runner function
-        task run_all_tests;
-            integer i;
-            reg [8*64-1:0] romfile;
-            reg [8*32-1:0] test_name;
-            reg [8*16-1:0] test_type;
-
-        begin
-            $display("\n========================================");
-            $display("DYNAMIC ROM TEST SUITE");
-            $display("========================================");
-            $display("Found %0d ROM configurations", NUM_TESTS);
-            $display("Clock period: 20ns (50MHz)");
-            $display("Reset: Active high");
-            $display("");
-        end
-            // Loop through all configured ROMs
-        for (i = 0; i < NUM_TESTS; i = i + 1) begin
-
-            case (i)
-            0: begin
-                romfile    = ROM_FILE0;   test_name = TEST_NAME0;  test_type = TEST_TYPE0;         
-            end
-            1: begin
-                romfile    = ROM_FILE1;   test_name = TEST_NAME1;  test_type = TEST_TYPE1;
-            end
-            2: begin
-                romfile    = ROM_FILE2;   test_name = TEST_NAME2;  test_type = TEST_TYPE2;
-                end
-
-            default: begin
-                romfile    = {8*64{1'b0}};
-                test_name  = {8*32{1'b0}};
-                test_type  = {8*16{1'b0}};
-                ROM_valid  = 1;
-                end
-            endcase
-
-            $display("Running test %0d/%0d: %0s", i+1, NUM_TESTS, test_name);
-            run_prog(romfile, 0, 1000, test_name, test_type);
-            end
-            
-    endtask
         // Simplified initial block
         initial begin
             $dumpfile("waves.vcd");
@@ -197,9 +158,25 @@ parameter [8*16-1:0] TEST_TYPE2  = "counter";
             $display("- I/O signals: io_addr, io_data, io_we");
             $display("- Program monitoring signals");
             
-            // Run all configured tests dynamically
-            run_all_tests();
+            // Run the dynamic test
+            run_dynamic_test();
             
             $finish;
         end
+        
+    // Dynamic test runner
+    task run_dynamic_test;
+        begin
+            $display("\n========================================");
+            $display("DYNAMIC ROM TEST");
+            $display("========================================");
+            $display("ROM file: %0s", dynamic_rom_file);
+            $display("Test name: %0s", dynamic_test_name);
+            $display("Clock period: 20ns (50MHz)");
+            $display("Reset: Active high");
+            $display("");
+            
+            run_prog(dynamic_rom_file, 0, 1000, dynamic_test_name, "dynamic");
+        end
+    endtask
     endmodule

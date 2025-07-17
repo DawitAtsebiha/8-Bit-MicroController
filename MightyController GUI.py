@@ -1,5 +1,3 @@
-# app.py – 8-Bit MightyController GUI (black text, white background)
-
 import os, glob, sys
 from pathlib import Path
 from PyQt6.QtWidgets import (
@@ -128,12 +126,23 @@ class MainWindow(QWidget):
     def _on_assemble_done(self):
         ok = self.proc_asm.exitCode() == 0
         self._set_status("Assembly OK" if ok else "Assembly failed", "#27ae60" if ok else "#e74c3c")
-        if ok: self._info("Assembly Complete", f"Output: {self._pending_bin}")
+        if ok: 
+            self._info("Assembly Complete", f"Output: {self._pending_bin}\n\nYou can now run 'Compile & Simulate' to test your program.")
         self.proc_asm.readyReadStandardOutput.disconnect()
         self.proc_asm.finished.disconnect()
 
     # Compiling + Simulation
     def _run_compile(self):
+        if not self.has_file:
+            self._info("Warning", "Please select and assemble an ASM file first.")
+            return
+            
+        # Check if binary file exists
+        expected_bin = f"ROM Programs/build/{self.file_name}.bin"
+        if not os.path.exists(expected_bin):
+            self._info("Warning", f"Binary file not found: {expected_bin}\n\nPlease assemble your code first using 'Assemble Code' button.")
+            return
+            
         self.console.clear()
         self._set_status("Compiling…", "#f39c12")
         build_dir = Path("ROM Programs/build"); build_dir.mkdir(exist_ok=True)
@@ -151,10 +160,22 @@ class MainWindow(QWidget):
             self.proc_cc.readyReadStandardOutput.disconnect(); self.proc_cc.finished.disconnect(); return
         else:
             self._set_status("Running simulation…", "#f39c12")
+            
+            # Construct dynamic simulation arguments
+            rom_file = f"ROM Programs/build/{self.file_name}.bin"
+            test_name = f"{self.file_name} Test"
+            
+            sim_args = [
+                "-n", 
+                "ROM Programs/build/tb.out",
+                f"+ROMFILE={rom_file}",
+                f"+TESTNAME={test_name}"
+            ]
+            
             self.proc_sim.readyReadStandardOutput.connect(lambda: self._append_output(self.proc_sim),
                                                         Qt.ConnectionType.AutoConnection)
             self.proc_sim.finished.connect(self._on_sim_done, Qt.ConnectionType.AutoConnection)
-            self.proc_sim.start("vvp", ["-n", "ROM Programs/build/tb.out"])
+            self.proc_sim.start("vvp", sim_args)
 
     def _on_sim_done(self):
         ok = (self.proc_sim.exitCode() == 0)
