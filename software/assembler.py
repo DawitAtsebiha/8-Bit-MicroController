@@ -116,19 +116,39 @@ def assemble(lines: List[str]) -> bytes:
     # pass-2: emit op-codes + operands
     rom: List[int] = []
     pc = 0
+
     for line_no, ln in enumerate(src, 1):
         lab, inst = _split_label(ln)
+
         if not inst or EQU_RE.match(inst):
             continue
+
         mnem, *ops = inst.split()
         mode, op_val = _determine_mode(mnem, ops, labels, line_no)
         opc = _lookup(mnem, mode, line=line_no)
         rom.append(opc.code); pc += 1
+
         if mode in {"IMM", "DIR"}:
             rom.append(op_val)
+
         elif mode == "REL":
-            off = (-2 & 0xFF) if op_val == "*" else (labels[op_val] - (pc + 1)) & 0xFF
+
+            if op_val == "*":
+                off = (-1 & 0xFF)
+
+            else:
+                target_addr = labels[op_val]
+                current_pc = pc + 1  # PC after branch instruction (pc is already incremented)
+                offset = target_addr - current_pc
+                
+                # Check if offset is within valid range (-128 to +127)
+                if offset < -128 or offset > 127:
+                    raise AsmError(f"Branch target too far: {offset}")
+                
+                off = offset & 0xFF
+            
             rom.append(off)
+            
         pc = len(rom)
     return bytes(rom)
 
@@ -144,7 +164,7 @@ def _determine_mode(mnem: str, ops: List[str], labels: Dict[str, int], line: int
     if not ops:
         if (mnem_u, "IMP") in OPCODES:
             return "IMP", None
-        raise AsmError(f"Line {line}: missing operand")
+        raise AsmError(f"Line {line}: missing operand NIGGER")
 
     token = ops[0]
 
