@@ -76,8 +76,8 @@ module memory (
         
         // Debug output for critical addresses
         if (address == 8'h44 || address == 8'h45 || address == 8'h46) begin
-            $display("[DEBUG] Memory access: address=%h, data_out=%h, rom_out=%h at time %0t", 
-                    address, data_out, rom_out, $time);
+            // $display("[DEBUG] Memory access: address=%h, data_out=%h, rom_out=%h at time %0t", 
+            //       address, data_out, rom_out, $time);
         end
     end
 endmodule
