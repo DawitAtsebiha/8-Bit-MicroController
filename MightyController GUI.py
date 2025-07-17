@@ -217,11 +217,6 @@ class MainWindow(QWidget):
                 image: none;
                 border: 2px solid #2980b9;
             }
-            QCheckBox::indicator:checked:after {
-                content: "✓";
-                color: white;
-                font-weight: bold;
-            }
         """
 
     def _create_left_panel(self):
@@ -594,11 +589,13 @@ class MainWindow(QWidget):
                 return
         
         # Build simulation arguments with debug options
+        cycle_value = self.cycle_spin.value()
+        
         sim_args = [
             "-n", "ROM Programs/build/tb.out",
             f"+ROMFILE={bin_file}",
             f"+TESTNAME={program_name} Test",
-            f"+CYCLES={self.cycle_spin.value()}"
+            f"+CYCLES={cycle_value}"
         ]
         
         # Add debug flags based on checkboxes
@@ -613,18 +610,22 @@ class MainWindow(QWidget):
 
         if self.debug_enable.isChecked():
             sim_args.append("+DEBUG")                                      # master switch
-            sim_args.extend(flag for cb, flag, _ in debug_flags if cb.isChecked())
+            enabled_flags = [flag for cb, flag, _ in debug_flags if cb.isChecked()]
+            sim_args.extend(enabled_flags)
+            self._log(f"🔍 Debug flags added: {enabled_flags}")
 
         if self.debug_verbose.isChecked():                                 # verbose is independent
             sim_args.append("+DEBUG_VERBOSE")
+            self._log("🔍 Verbose debugging enabled")
 
-        if self.debug_enable.isChecked() or self.debug_verbose.isChecked():
+        if self.debug_enable.isChecked():
             active = [label for cb, _, label in debug_flags if cb.isChecked()]
             if self.debug_verbose.isChecked():
                 active.append("Verbose")
             self._log(f"🔍 Debug enabled: {', '.join(active)}")
             
-        self._log(f"⏱️ Max cycles: {self.cycle_spin.value()}")
+        # self._log(f"⏱️ Max cycles: {cycle_value}")                 
+        # self._log(f"🚀 Command: vvp {' '.join(sim_args)}")
         
         # Run simulation
         self.proc_sim.readyReadStandardOutput.connect(
