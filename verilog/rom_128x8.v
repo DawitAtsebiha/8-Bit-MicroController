@@ -8,10 +8,6 @@ module rom_128x8_sync (
     reg [7:0] ROM [0:127];
     
     initial begin
-        // Simple test program:
-        //   LDA #$AA       (86 AA)
-        //   STAA $F0       (96 F0)  -> Write to output port 0
-        //   BRA *          (20 FE)  -> Infinite loop
         ROM[0] = 8'h86; ROM[1] = 8'hAA;
         ROM[2] = 8'h96; ROM[3] = 8'hF0;
         ROM[4] = 8'h20; ROM[5] = 8'hFE;
