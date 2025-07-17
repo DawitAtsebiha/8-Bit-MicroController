@@ -22,7 +22,7 @@ module rom_128x8_sync (
         end
     end
 
-    always @(posedge clk) begin
-        data_out <= ROM[address];
+    always @* begin
+        data_out = ROM[address];
     end
 endmodule
