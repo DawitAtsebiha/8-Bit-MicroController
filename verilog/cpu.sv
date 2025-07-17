@@ -20,6 +20,7 @@ module cpu(
     wire        CCR_Load;
     wire [1:0]  Bus2_Sel;
     wire [1:0]  Bus1_Sel;
+    wire        ALU_B_Sel;
 
     // Instantiate Control Unit
     control_unit control_unit1 (
@@ -37,6 +38,7 @@ module cpu(
         .CCR_Load(CCR_Load),
         .Bus2_Sel(Bus2_Sel),
         .Bus1_Sel(Bus1_Sel),
+        .ALU_B_Sel(ALU_B_Sel),
         .write(write)
     );
 
@@ -57,6 +59,7 @@ module cpu(
         .CCR_Load(CCR_Load),
         .Bus2_Sel(Bus2_Sel),
         .Bus1_Sel(Bus1_Sel),
+        .ALU_B_Sel(ALU_B_Sel),
         .from_memory(from_memory),
         .to_memory(to_memory)
     );

@@ -13,6 +13,7 @@ module control_unit (
     output reg CCR_Load,
     output reg [1:0] Bus2_Sel,
     output reg [1:0] Bus1_Sel,
+    output reg ALU_B_Sel,
     output reg write
 );
 
@@ -51,7 +52,7 @@ module control_unit (
         // Defaults
         next = state;
         {IR_Load, MAR_Load, PC_Load, PC_Inc, A_Load, B_Load, 
-         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, write} = 16'b0;
+         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, ALU_B_Sel, write} = 17'b0;
 
         case(state)
             Fetch0: begin
@@ -192,16 +193,15 @@ module control_unit (
             end
 
             Branch1: begin
-                Bus2_Sel = 2'b10;  // from_memory on Bus2  
-                B_Load = 1;        // Load offset into B_Reg
                 PC_Inc = 1;        // Increment PC to point after instruction
                 next = Branch2;
             end
 
             Branch2: begin
                 Bus1_Sel = 2'b00;  // PC on Bus1
-                Bus2_Sel = 2'b00;  // ALU_Result on Bus2
-                ALU_Sel = 4'd0;    // ADD operation (PC + offset)
+                Bus2_Sel = 2'b10;  // from_memory (branch offset) on Bus2
+                ALU_Sel = 4'd0;    // ADD operation (PC + offset from memory)
+                ALU_B_Sel = 1;     // Use BUS2 as ALU B input (branch offset)
 
                 case(IR)
                     8'h20: PC_Load = 1; // BRA

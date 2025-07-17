@@ -14,6 +14,7 @@ module data_path(
     input CCR_Load,
     input [1:0] Bus2_Sel,
     input [1:0] Bus1_Sel,
+    input ALU_B_Sel,  // 0 = B_Reg, 1 = BUS2
     input [7:0] from_memory,
     output reg [7:0] to_memory
 );
@@ -23,11 +24,15 @@ module data_path(
     reg [3:0] CCR;
     wire [7:0] ALU_Result;
     wire [3:0] CCR_in;
+    wire [7:0] ALU_B_Input;  // Multiplexed ALU B input
+    
+    // ALU B input selection
+    assign ALU_B_Input = ALU_B_Sel ? BUS2 : B_Reg;
     
     // ALU instantiation
     ALU alu1 (
         .A(BUS1),
-        .B(B_Reg),
+        .B(ALU_B_Input),
         .ALU_Sel(ALU_Sel),
         .NZVC(CCR_in),
         .Result(ALU_Result)
