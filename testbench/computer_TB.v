@@ -20,8 +20,12 @@ module computer_TB;
 
     wire [7:0] PC = dut.cpu1.data_path1.PC;
     wire [7:0] IR = dut.cpu1.data_path1.IR_Reg;
+    
+    // Access register file contents (A=register 0, B=register 1, etc.)
     wire [7:0] Reg_A = dut.cpu1.reg_file.registers[0];  // Register A
     wire [7:0] Reg_B = dut.cpu1.reg_file.registers[1];  // Register B
+    wire [7:0] Reg_C = dut.cpu1.reg_file.registers[2];  // Register C
+    wire [7:0] Reg_D = dut.cpu1.reg_file.registers[3];  // Register D
 
     // Output monitoring signals for GTKWave
     reg [7:0] ROM_output;
@@ -35,6 +39,33 @@ module computer_TB;
     end
     
     integer cycles = 0;
+    
+    // Function to convert state number to state name
+    function [8*12-1:0] state_name;
+        input [5:0] state_val;
+        begin
+            case(state_val)
+                0:  state_name = "Fetch0";
+                1:  state_name = "Fetch1";
+                2:  state_name = "Fetch2";
+                10: state_name = "Decode";
+                20: state_name = "LoadStore0";
+                21: state_name = "LoadStore1";
+                22: state_name = "LoadStore2";
+                23: state_name = "LoadStore3";
+                24: state_name = "LoadStore4";
+                25: state_name = "LoadStore5";
+                30: state_name = "Data0";
+                31: state_name = "Data1";
+                32: state_name = "Data2";
+                33: state_name = "Data3";
+                40: state_name = "Branch0";
+                41: state_name = "Branch1";
+                42: state_name = "Branch2";
+                default: state_name = "UNKNOWN";
+            endcase
+        end
+    endfunction
     
     // Monitor for enhanced debugging (moved to test loop)
     // always @(posedge clk) begin
@@ -68,11 +99,13 @@ module computer_TB;
             while (!$feof(fd)) begin
                 bytes_read = $fread(data_byte, fd);
                 if (bytes_read > 0) begin
+                //  $display("Loading ROM[%0d] = 0x%02h", idx, data_byte);  Shows loading progress of bytes into ROM
                     dut.memory1.rom1.ROM[idx] = data_byte;
                     idx = idx + 1;
                 end
             end
             $fclose(fd);
+        //  $display("ROM loading complete, loaded %0d bytes", idx);
         end
         endtask
 
@@ -82,7 +115,7 @@ module computer_TB;
     reg integer debug_cycles = 1000;      // Default to 1000 cycles if not specified
     
     // Enhanced debugging parameters
-    reg     debug_enable = 0;              // Enable/disable debug output
+    reg     debug_enable = 1;              // Enable/disable debug output (enabled by default)
     reg     debug_pc = 0;                  // Show Program Counter
     reg     debug_ir = 0;                  // Show Instruction Register
     reg     debug_regs = 0;                // Show A and B registers
@@ -194,17 +227,35 @@ module computer_TB;
         for (n = 0; n < max_cycles && !done; n = n + 1) begin
             @(posedge clk); cycles = cycles + 1;
             
+            // Monitor register changes - show values when registers are written (only if debug enabled)
+            if (dut.cpu1.reg_write_enable && debug_enable && debug_regs) begin
+                $display("  [Cycle %0d] REG_WRITE: R%0d = 0x%02h", 
+                         cycles, dut.cpu1.reg_write_addr, dut.cpu1.reg_write_data);
+                $display("                Current register values: A=0x%02h B=0x%02h C=0x%02h D=0x%02h", 
+                         Reg_A, Reg_B, Reg_C, Reg_D);
+            end
+            
             // Debug monitoring for PC, IR, Registers, State
             if (debug_enable && cycles >= debug_start_cycle && 
                (debug_end_cycle == -1 || cycles <= debug_end_cycle)) begin
                 
                 if (debug_pc || debug_ir || debug_regs || debug_state) begin
-                    $write("  [Cycle %0d] ", cycles);
-                    if (debug_pc) $write("PC=0x%02h ", PC);
-                    if (debug_ir) $write("IR=0x%02h ", IR);
-                    if (debug_regs) $write("A=0x%02h B=0x%02h ", Reg_A, Reg_B);
-                    if (debug_state) $write("State=%0d ", dut.cpu1.control_unit1.state);
-                    $write("\n");
+                    if (debug_regs) begin
+                        // Show detailed register display with cycle info
+                        $write("  [Cycle %0d] ", cycles);
+                        if (debug_pc) $write("PC=0x%02h ", PC);
+                        if (debug_ir) $write("IR=0x%02h ", IR);
+                        if (debug_state) $write("State=%s ", state_name(dut.cpu1.control_unit1.state));
+                        $write("\n");
+                        dut.cpu1.reg_file.debug_print_registers();
+                    end else begin
+                        // Show compact display without detailed registers
+                        $write("  [Cycle %0d] ", cycles);
+                        if (debug_pc) $write("PC=0x%02h ", PC);
+                        if (debug_ir) $write("IR=0x%02h ", IR);
+                        if (debug_state) $write("State=%s ", state_name(dut.cpu1.control_unit1.state));
+                        $write("\n");
+                    end
                 end
             end
             
@@ -242,6 +293,8 @@ module computer_TB;
                 $display("Register contents:");
                 $display("  Reg A = 0x%02h (should be 0x84 - final result)", Reg_A);
                 $display("  Reg B = 0x%02h (should be 0x33 - initial value)", Reg_B);
+                $display("Full register file contents:");
+                dut.cpu1.reg_file.debug_print_registers();
                 $display("Memory contents:");
                 $display("  $50 = 0x%02h (should be 0x50 - register A initial)", dut.memory1.ram1.RAM[8'h50]);
                 $display("  $51 = 0x%02h (should be 0x33 - register B initial)", dut.memory1.ram1.RAM[8'h51]);
