@@ -294,10 +294,10 @@ def assemble_cmd(asm_path: str, out: str):
     # Auto-generate output path if not specified
     if out is None:
         asm_file = pathlib.Path(asm_path)
-        out = f"ROM Programs/build/{asm_file.stem}.bin"
+        out = f"Programs/build/{asm_file.stem}.bin"
     
-    # Ensure ROM Programs/build directory exists
-    build_dir = pathlib.Path("ROM Programs/build")
+    # Ensure Programs/build directory exists
+    build_dir = pathlib.Path("Programs/build")
     build_dir.mkdir(parents=True, exist_ok=True)
     
     lines = pathlib.Path(asm_path).read_text(encoding="utf-8").splitlines()
