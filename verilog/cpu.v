@@ -16,8 +16,21 @@ module cpu(
     wire [3:0]  ALU_Sel;
     wire [3:0]  CCR_Result;
     wire        CCR_Load;
-    wire [1:0]  Bus2_Sel;
+    wire [2:0]  Bus2_Sel;
     wire [1:0]  Bus1_Sel;
+    wire [7:0]  immediate_value;
+    wire [7:0]  address_value;
+    wire        ALU_B_Sel;
+    wire        addr_sel;       // Address selection: 0=PC, 1=MAR
+
+    // Register file control signals  
+    wire [3:0] reg_read_addr_A, reg_read_addr_B, reg_write_addr;
+    wire [7:0] reg_read_data_A, reg_read_data_B, reg_write_data;
+    wire reg_write_enable;
+
+    // ALU signals
+    wire [7:0] alu_result;
+    wire [3:0] NZVC;
 
     // Instantiate Control Unit
     control_unit control_unit1 (
@@ -39,7 +52,10 @@ module cpu(
         .Bus1_Sel(Bus1_Sel),
         .ALU_B_Sel(ALU_B_Sel),
         .write(write),
-        .from_memory(from_memory)
+        .from_memory(from_memory),
+        .immediate_out(immediate_value),
+        .address_out(address_value),
+        .addr_sel(addr_sel)
     );
 
     // Instantiate Data Path
@@ -63,16 +79,11 @@ module cpu(
         .alu_result(alu_result),
         .reg_data_A(reg_read_data_A),
         .reg_data_B(reg_read_data_B),
-        .NZVC(NZVC)
+        .NZVC(NZVC),
+        .immediate_value(immediate_value),
+        .address_value(address_value),
+        .addr_sel(addr_sel)
     );
-
-    // For multiple register read/write
-    wire [3:0] reg_read_addr_A, reg_read_addr_B, reg_write_addr;
-    wire [7:0] reg_read_data_A, reg_read_data_B, reg_write_data;
-    wire reg_write_enable;
-
-    wire [7:0] alu_result;
-    wire [3:0] NZVC;
 
     register_file reg_file (
         .clk(clk),
