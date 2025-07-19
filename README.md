@@ -1,4 +1,5 @@
 # 8-Bit MightyController
+#### Check out active-development to see what new changes are being worked on! (Note: the build might not be stable enough to run properly)
 
 A complete 8-bit CPU implementation with GUI interface, custom assembler, SystemVerilog hardware description, and simulation tools.
 
@@ -8,40 +9,43 @@ A complete 8-bit CPU implementation with GUI interface, custom assembler, System
    ```powershell
    python "MightyController GUI.py"
    ```
-
-2. **Select your assembly file** (.asm)
+2. **Select your assembly file** (.asm) or use **Quick Run** for existing binaries
 3. **Assemble code** to binary
-4. **Compile & simulate** 
+4. **Compile & simulate**
 5. **View waveforms** in GTKWave
+
+### Quick Run (New!)
+- Select a previously assembled program from the dropdown and click **Run** to simulate instantly.
 
 ## Project Structure
 
 ```
 8-But MightyController/
-├── MightyController GUI.py           # Main GUI application
-├── ROM Programs/                     # Assembly programs
-│   ├── asm/                         
-│   │   ├── blink.asm                # LED blink demo
-│   │   └── fibo.asm                 # Fibonacci sequence demo
-│   └── build/                       # Compiled binaries
-│       ├── blink.bin
-│       ├── fibo.bin
-│       └── tb.out
+|
+├── MightyController GUI.py          # Main GUI application
+|
+├── ROM Programs/                  
+│   ├── asm/                         # Demo assembly test programs
+│   └── build/                       # Compiled binaries from assembly test programs
+│      
 ├── software/                     
-│   └── assembler.py                 # Python assembler
+│   └── assembler.py                 # Assembly to binary assembler
+|
 ├── verilog/                        
-│   ├── computer.sv                  # Top-level system
-│   ├── cpu.sv                       # CPU core
-│   ├── ALU.sv                       # Arithmetic Logic Unit
-│   ├── control_unit.sv              # Control unit
-│   ├── data_path.sv                 # Data path
-│   └── Memory.sv                    # Memory subsystem
+│   ├── computer.v                  # Top-level system
+│   ├── cpu.v                       # CPU core
+│   ├── ALU.v                       # Arithmetic Logic Unit
+│   ├── control_unit.v              # Control unit
+│   ├── data_path.v                 # Data path
+│   ├── memory.v                    # Memory subsystem 
+|   ├── ram_96x8.v                   # RAM
+│   └── rom_128x8.v                 # ROM
+|
 ├── testbench/                       
-│   └── computer_TB.sv               # Main testbench
+│   └── computer_TB.sv               # Main testbench (dynamic ROM loading, debug options)
 ├── Documentation/                  
-    ├── 8_But_MightyController_Companion_Document.pdf
-    |── State Machine Diagrams
-    |── ROM Programs Waveform
+    ├── State Machine Diagrams/
+    ├── ROM Programs Waveform/
     └── MicroController Schematics/
 ```
 
@@ -73,8 +77,10 @@ pip install PyQt6 click
 | `SUB` | IMP | `SUB` | Subtract B from A |
 | `AND` | IMP | `AND` | Logical AND |
 | `OR` | IMP | `OR` | Logical OR |
-| `INC` | IMP | `INC` | Increment accumulator |
-| `DEC` | IMP | `DEC` | Decrement accumulator |
+| `INCA` | IMP | `INC` | Increment accumulator A |
+| `DECA` | IMP | `DEC` | Decrement accumulator A |
+| `INCB` | IMP | `INCB` | Increment accumulator B |
+| `DECB` | IMP | `DECB` | Decrement accumulator B |
 | `BRA` | REL | `BRA loop` | Branch always |
 | `BNE` | REL | `BNE loop` | Branch if not equal |
 | `BEQ` | REL | `BEQ loop` | Branch if equal |
@@ -93,77 +99,26 @@ pip install PyQt6 click
 | `$80-$DF` | RAM (96 bytes) |
 | `$F0-$FF` | I/O Ports (16 bytes) |
 
-## Sample Programs
+## Debug Options (GUI)
 
-### Blink Program (`ROM Programs/asm/blink.asm`)
+The GUI now includes advanced debugging options:
 
-Blinks an LED ON and OFF in a loop
-```assembly
-        LDA  #$01      ; Load pattern 1 (LED on)
-loop:
-        STAA $F0       ; Output to LED port (on)
-        LDA  #$01      ; Reload A (creates a delay cycle)
-        LDA  #$00     
-        STAA $F0       
-        LDA  #$00   
-        BRA  loop      ; Continue blinking until simulation is terminated
-```
-
-### Fibonacci Program (`ROM Programs/asm/fibo.asm`)
-
-Calculates Fibonacci sequence: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ... with wrap around
-``` assembly
-; seeds
-        LDA   #$00          ; F0
-        STAA  $80
-        STAA  $F0  
-        
-        LDA   #$01          ; F1
-        STAA  $81
-        STAA  $F0           ; Outputs current F to I/O port 0
-
-; F2 ­–­­ F14 
-        LDA   #$00          ; F2 = 0+1
-        LDAB  #$01
-        ADD
-        STAA  $82
-        STAA  $F0          
-
-        LDA   #$01          ; F3 = 1+1
-        LDAB  #$01
-        ADD
-        STAA  $83
-        STAA  $F0                   
-
-        .
-        .
-        .   
-
-        LDA   #$59          ; F13 = 89+144
-        LDAB  #$90
-        ADD
-        STAA  $8D
-        STAA  $F0         
-
-        LDA   #$90          ; F14 = 144+233 (wrap 121)
-        LDAB  #$E9
-        ADD
-        STAA  $8E
-        STAA  $F0        
-
-; halt
-DONE:   BRA   DONE          ; 20 FE
-```
+| Option | Description |
+|--------|-------------|
+| **Max Cycles** | Configure simulation length (100-50000 cycles) |
+| **Show PC** | Display Program Counter changes |
+| **Show IR** | Display Instruction Register changes |
+| **Show A Register** | Display A Register changes |
+| **Show B Register** | Display B Register changes |
+| **Show Memory** | Display Memory access |
+| **Show I/O** | Display I/O operations |
+| **Show State** | Display CPU state machine |
+| **Verbose Mode** | Enable all debug options |
+| **Presets** | Quick configuration for common debug scenarios |
 
 ## GTKWave Signals
 
 When viewing waveforms, look for these key signals:
-
-**Program Monitoring:**
-- `blink_output` - LED blink patterns - Outputs from 0 to 20040 ns
-- `blink_valid` - Blink test active
-- `fibonacci_output` - Fibonacci sequence values - Outputs from 20040 ns to 40070 ns
-- `fibonacci_valid` - Fibonacci test active
 
 **CPU State:**
 - `PC` - Program Counter
@@ -185,10 +140,9 @@ When viewing waveforms, look for these key signals:
 | Simulation fails | Verify Icarus Verilog installation |
 | No waveform | Ensure simulation completes successfully |
 | GTKWave won't open | Check that `waves.vcd` exists and GTKWave is installed |
+| B register corruption | Fixed in latest version - B register now works correctly in branch instructions |
 
 ## Development Workflow
-
-#### Please note that it currently is not possible to have your written programs loaded into the ROM dynamically, you would need to write it into the testbench (computer_TB) to have it be run, ***this is being worked on*** 
 
 ### Using the GUI (Recommended)
 1. **Launch:** `python "MightyController GUI.py"`
@@ -199,6 +153,12 @@ When viewing waveforms, look for these key signals:
 6. **View Waveforms** (opens GTKWave)
 7. **Debug** and iterate
 
+### Quick Run Feature (New!)
+1. **Launch the GUI**
+2. **Select** a previously assembled program from the dropdown
+3. **Click Run** to immediately simulate
+4. **View Waveforms** to analyze results
+
 ### Command Line (Advanced)
 ```powershell
 # Assemble
@@ -207,8 +167,8 @@ python software/assembler.py assemble "ROM Programs/asm/program.asm" -o "ROM Pro
 # Compile simulation
 iverilog -g2012 -s computer_TB -o "ROM Programs/build/tb.out" verilog/*.sv testbench/computer_TB.sv
 
-# Run simulation
-vvp -n "ROM Programs/build/tb.out"
+# Run simulation with dynamic ROM loading and debug options
+vvp -n "ROM Programs/build/tb.out" +ROMFILE="ROM Programs/build/program.bin" +TESTNAME="My Program Test" +CYCLES=1000 +DEBUG +DEBUG_PC +DEBUG_IR +DEBUG_REGS
 
 # View waveforms
 gtkwave waves.vcd
@@ -220,4 +180,12 @@ gtkwave waves.vcd
 - **Hardware Schematics**: `Documentation/MicroController Schematics/`
 - **Instruction Set**: See table above
 - **Sample Code**: `ROM Programs/asm/` directory
+
+## Recent Updates
+
+- **Dynamic ROM Loading**: Programs can now be loaded into ROM directly from the GUI without testbench modifications
+- **Debug Options**: Added configurable debugging with register visibility controls
+- **Quick Run**: Added feature to quickly run previously assembled programs 
+- **B Register Fix**: Fixed critical bug that corrupted B register during branch instructions
+- **Enhanced GUI**: Improved user interface with better layout and styling
 
