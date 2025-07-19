@@ -352,14 +352,14 @@ class MainWindow(QWidget):
         self.debug_enable = QCheckBox("Enable Debug")
         self.debug_pc = QCheckBox("Show PC")
         self.debug_ir = QCheckBox("Show IR")
-        self.debug_regs = QCheckBox("Show A/B Regs")
+        self.debug_regs = QCheckBox("Show Register Values")
         self.debug_mem = QCheckBox("Show Memory")
         self.debug_io = QCheckBox("Show I/O")
         self.debug_state = QCheckBox("Show State")
         self.debug_verbose = QCheckBox("Verbose Mode")
         
         # Set defaults
-        self.debug_io.setChecked(True)  # I/O debugging on by default
+        self.debug_io.setChecked(True)
         
         # Arrange in 2 columns with better sizing
         debug_checks_layout.addWidget(self.debug_enable, 0, 0)
