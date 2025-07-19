@@ -2,13 +2,16 @@ module control_unit (
     input clk,
     input reset,
     input [7:0] IR,
+    input [7:0] from_memory,
     input [3:0] CCR_Result,
     output reg IR_Load,
     output reg MAR_Load,
     output reg PC_Load,
     output reg PC_Inc,
-    output reg A_Load,
-    output reg B_Load,
+    output reg [3:0] reg_read_addr_A,
+    output reg [3:0] reg_read_addr_B,
+    output reg [3:0] reg_write_addr,
+    output reg reg_write_enable,
     output reg [3:0] ALU_Sel,
     output reg CCR_Load,
     output reg [1:0] Bus2_Sel,
@@ -19,15 +22,38 @@ module control_unit (
 
     parameter [4:0] 
         Fetch0 = 0, Fetch1 = 1, Fetch2 = 2, Decode = 3,
-        LoadStore0 = 4, LoadStore1 = 5, LoadStore2 = 6, LoadStore3 = 7, LoadStore4 = 8,
-        Data = 9, Branch0 = 10, Branch1 = 11, Branch2 = 12;
-    
+        LoadStore0 = 4, LoadStore1 = 5, LoadStore2 = 6, LoadStore3 = 7, LoadStore4 = 8, LoadStore5 = 9,
+        Data0 = 10, Data1 = 11, Data2 = 12, Data3 = 13, 
+        Branch0 = 14, Branch1 = 15, Branch2 = 16;
+
     reg [4:0] state, next;
     reg LoadStoreOP, DataOP, BranchOP;
+    reg [7:0] reg_operand_1, reg_operand_2; // First (destination) and Second (source) register operands
     
     always @(posedge clk or negedge reset) begin
-        if (!reset) state <= Fetch0;
-        else state <= next;
+        if (!reset) begin
+            state <= Fetch0;
+            reg_operand_1 <= 8'h00;
+            reg_operand_2 <= 8'h00;
+
+        end else begin
+            state <= next;
+            
+            // Capture operands as they're fetched
+            case(state)
+                LoadStore2: begin
+                    reg_operand_1 <= from_memory;  // First operand (register for load/store)
+                end
+                Data2: begin
+                    reg_operand_1 <= from_memory;  // First register for data ops
+                end
+                LoadStore4: begin
+                    if (DataOP) begin
+                        reg_operand_2 <= from_memory;  // Second register for data ops
+                    end
+                end
+            endcase
+        end
     end
 
     // Instruction decoding logic - moved outside the main state machine
@@ -36,23 +62,22 @@ module control_unit (
         DataOP = 0;
         BranchOP = 0;
 
-        case(IR)
-            // LoadStore operations
-            8'h86, 8'hB6, 8'h88, 8'hB7, 8'h96, 8'h97: LoadStoreOP = 1;
-            
-            // Data operations
-            8'h42, 8'h43, 8'h44, 8'h45, 8'h46, 8'h47, 8'h48, 8'h49, 8'h50, 8'h51, 8'h52: DataOP = 1;
-            
-            // Branch operations
-            8'h20, 8'h21, 8'h22, 8'h23, 8'h24, 8'h25, 8'h26, 8'h27, 8'h28: BranchOP = 1;
+        case(IR[7:4]) // The upper 4 bits define the operation type
+            4'h8: LoadStoreOP = 1;  // 0x80-0x8F: Load/Store operations
+            4'h9: DataOP = 1;       // 0x90-0x9F: Data operations  
+            4'hA: DataOP = 1;       // 0xA0-0xAF: Single register operations
+            4'h2: BranchOP = 1;     // 0x20-0x2F: Branch operations
+            default: LoadStoreOP = 0;
         endcase
     end
 
     always @* begin
         // Defaults
         next = state;
-        {IR_Load, MAR_Load, PC_Load, PC_Inc, A_Load, B_Load, 
-         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, ALU_B_Sel, write} = 17'b0;
+        {IR_Load, MAR_Load, PC_Load, PC_Inc, reg_write_enable, 
+         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, ALU_B_Sel, write} = 15'b0;
+
+        {reg_read_addr_A, reg_read_addr_B, reg_write_addr} = 12'b0;
 
         case(state)
             Fetch0: begin
@@ -74,10 +99,46 @@ module control_unit (
             end
 
             Decode: begin 
-                if (LoadStoreOP)       next = LoadStore0;
-                else if (DataOP)       next = Data;
-                else if (BranchOP)     next = Branch0;
-                else                  next = Fetch0;
+                if (LoadStoreOP)       
+                    next = LoadStore0;
+
+                else if (DataOP) begin
+                    case(IR[7:4])
+                        4'h9: next = Data0;        // Two-register ops need 2 operands
+                        4'hA: next = LoadStore0;   // Single-register ops only need 1 operand
+                        default: next = Fetch0;
+                    endcase
+                end
+
+                else if (BranchOP)     
+                    next = Branch0;
+
+                else                  
+                    next = Fetch0;
+            end
+
+            Data0: begin
+                Bus1_Sel = 2'b00;    // PC
+                Bus2_Sel = 2'b01;    // Bus1
+                MAR_Load = 1;
+                next = Data1;
+            end
+
+            Data1: begin // Fetches first register operand
+                PC_Inc = 1;
+                next = Data2;
+            end
+
+            Data2: begin
+                Bus2_Sel = 2'b10;         
+                next = Data3;
+            end
+
+            Data3: begin
+                Bus1_Sel = 2'b00;
+                Bus2_Sel = 2'b01;  
+                MAR_Load = 1;
+                next = LoadStore1; // Fetches second register operand
             end
 
             LoadStore0: begin
@@ -93,95 +154,167 @@ module control_unit (
             end
 
             LoadStore2: begin
-                if (IR == 8'h86) begin 
-                    Bus2_Sel = 2'b10; 
-                    A_Load = 1; 
-                    next = Fetch0; 
-                end
-                else if (IR == 8'h88) begin 
-                    Bus2_Sel = 2'b10; 
-                    B_Load = 1; 
-                    next = Fetch0; 
-                end
-                else if ((IR == 8'h96) || (IR == 8'h97)) begin
-                    Bus2_Sel = 2'b10;
-                    MAR_Load = 1;
-                    next = LoadStore3;
-                end
-                else begin
+                Bus2_Sel = 2'b10;
+
+                if (DataOP && IR[7:4] == 4'hA) begin // All single-register operations (INC, DEC)
+                    CCR_Load = 1; 
+                    Bus1_Sel = 2'b01;
+                    Bus2_Sel = 2'b00;
+
+                    case(IR)
+                        8'hA0: begin  // INC reg
+                            reg_read_addr_A = reg_operand_1[3:0];
+                            reg_read_addr_B = reg_operand_2[3:0];
+                            reg_write_addr = reg_operand_1[3:0];
+                            reg_write_enable = 1;
+                            ALU_Sel = 4'd7; 
+                        end
+
+                        8'hA1: begin  // DEC reg
+                            reg_read_addr_A = reg_operand_1[3:0];
+                            reg_write_addr = reg_operand_1[3:0];
+                            reg_write_enable = 1;
+                            ALU_Sel = 4'd8;  // DEC
+                        end
+                        default: ALU_Sel = 4'd8;
+                    endcase
                     next = Fetch0;
-                end
+                
+                end else if (LoadStoreOP) begin // For Load and Store operations
+                    case(IR)
+                        8'h80: begin  // LD immediate
+                            next = LoadStore3;  // Need to get immediate value
+                        end
+                        8'h81: begin  // LD direct
+                            next = LoadStore3;  // Need to get address
+                        end
+                        8'h82: begin  // ST direct
+                            next = LoadStore3;  // Need to get address
+                        end
+                        default: next = Fetch0;
+                    endcase
+
+                end else if (DataOP && IR[7:4] == 4'h9) // For two-register data operations
+                    next = LoadStore3;
+
+                else
+                    next = Fetch0;
             end
 
-			LoadStore3 : begin          
-				case (IR)     
-                    8'h96: Bus1_Sel = 2'b01; // A Reg for STAA
-                    8'h97: Bus1_Sel = 2'b10; // B for STAB
-                    8'hB6, 8'hB7: Bus1_Sel = 2'b00; // LDA and LDAB direct (loading, not storing)
-                endcase			              
-				
-                next = LoadStore4;   
-			end
+            LoadStore3: begin
+                Bus1_Sel = 2'b00;
+                Bus2_Sel = 2'b01;
+                MAR_Load = 1;
+                next = LoadStore4;
+            end
 
-			LoadStore4 : begin     
-				case(IR) 
-			    	8'h96: begin
-                        Bus1_Sel = 2'b01;
-                        write = 1;
-                    end
-                    8'h97: begin
-                        Bus1_Sel = 2'b10;
-                        write = 1;
-                    end
-                    8'hB6: begin
-                        Bus2_Sel = 2'b10;
-                        A_Load = 1;
-                    end
-                    8'hB7: begin
-                        Bus2_Sel = 2'b10;
-                        B_Load = 1;
-                    end
-                endcase
+            LoadStore4: begin
+                PC_Inc = 1;
+                Bus2_Sel = 2'b10;
 
-				next  = Fetch0;
-			end
+                if (DataOP && IR[7:4] == 4'h9) begin // 2nd register operand captured in clocked block
+                    next = LoadStore5;
+                
+                end else if (LoadStoreOP) begin
+                    case(IR)
+                        8'h80: begin  // LD immediate
+                            reg_write_addr = reg_operand_1[3:0];
+                            reg_write_enable = 1;
+                            next = Fetch0;
+                        end
 
-            Data: begin
-                CCR_Load = 1;
-                Bus1_Sel = 2'b01;
-                Bus2_Sel = 2'b00;
-                A_Load = 1;
-                B_Load = 0;
+                        8'h81: begin  // LD direct
+                            MAR_Load = 1;  
+                            next = LoadStore5;
+                        end
 
-                case(IR)
-                    8'h42: ALU_Sel = 4'd0; // ADD
-                    8'h43: ALU_Sel = 4'd1; // SUB
-                    8'h44: ALU_Sel = 4'd2; // Logical AND
-                    8'h45: ALU_Sel = 4'd3; // Logical OR
-                    8'h46: ALU_Sel = 4'd4; // Bitwise AND
-                    8'h47: ALU_Sel = 4'd5; // Bitwise OR
-                    8'h48: ALU_Sel = 4'd6; // XOR
+                        8'h82: begin  // ST direct
+                            MAR_Load = 1;  
+                            reg_read_addr_A = reg_operand_1[3:0];
+                            Bus1_Sel = 2'b01;
+                            write = 1;
+                            next = Fetch0;
+                        end
+                        default: next = Fetch0;
+                    endcase
 
-                    8'h49: ALU_Sel = 4'd7; // INC A
+                end else if (LoadStoreOP) begin
+                    case(IR)
+                        8'h80: begin  // LD immediate
+                            reg_write_addr = reg_operand_1[3:0];
+                            reg_write_enable = 1;
+                            next = Fetch0;
+                        end
+                        8'h81: begin  // LD direct
+                            MAR_Load = 1;    // Load address
+                            next = LoadStore5;
+                        end
+                        8'h82: begin  // ST direct
+                            MAR_Load = 1;  
+                            reg_read_addr_A = reg_operand_1[3:0];
+                            next = LoadStore5;  // Go to next state to complete the write
+                        end
+                        default: next = Fetch0;
+                    endcase
+                end else next = Fetch0;
+            end
 
-                    8'h50: begin
-                        ALU_Sel = 4'd8; // INCB
-                        Bus1_Sel = 2'b10; 
-                        A_Load = 0;
-                        B_Load = 1;       
-                    end
+            LoadStore5: begin
+                if (DataOP && IR[7:4] == 4'h9) begin // Execute two-register data operations
+                    CCR_Load = 1;
+                    Bus1_Sel = 2'b01;
+                    Bus2_Sel = 2'b00;
 
-                    8'h51: ALU_Sel = 4'd9; // DECA
-
-                    8'h52: begin
-                        ALU_Sel = 4'd10; // DECB
-                        Bus1_Sel = 2'b10;  
-                        A_Load = 0;
-                        B_Load = 1;       
-                    end
-                    default: ALU_Sel = 4'd0; // Default to ADD
-                endcase
-
+                    case(IR)
+                        8'h90: begin  // ADD reg1, reg2
+                            reg_read_addr_A = reg_operand_1[3:0];
+                            reg_read_addr_B = reg_operand_2[3:0];
+                            reg_write_addr = reg_operand_1[3:0];
+                            reg_write_enable = 1;
+                            ALU_Sel = 4'd0;  // ADD
+                        end
+                        8'h91: begin  // SUB reg1, reg2
+                            reg_read_addr_A = reg_operand_1[3:0];
+                            reg_read_addr_B = reg_operand_2[3:0];
+                            reg_write_addr = reg_operand_1[3:0];
+                            reg_write_enable = 1;
+                            ALU_Sel = 4'd1;  // SUB
+                        end
+                        8'h92: begin  // AND reg1, reg2
+                            reg_read_addr_A = reg_operand_1[3:0];
+                            reg_read_addr_B = reg_operand_2[3:0];
+                            reg_write_addr = reg_operand_1[3:0];
+                            reg_write_enable = 1;
+                            ALU_Sel = 4'd4;  // AND
+                        end
+                        8'h93: begin  // OR reg1, reg2
+                            reg_read_addr_A = reg_operand_1[3:0];
+                            reg_read_addr_B = reg_operand_2[3:0];
+                            reg_write_addr = reg_operand_1[3:0];
+                            reg_write_enable = 1;
+                            ALU_Sel = 4'd5;  // OR
+                        end
+                        8'h94: begin  // XOR reg1, reg2
+                            reg_read_addr_A = reg_operand_1[3:0];
+                            reg_read_addr_B = reg_operand_2[3:0];
+                            reg_write_addr = reg_operand_1[3:0];
+                            reg_write_enable = 1;
+                            ALU_Sel = 4'd6;  // XOR
+                        end
+                        default: ALU_Sel = 4'd0;
+                    endcase
+                end
+                else if (LoadStoreOP && IR == 8'h81) begin
+                    // LD direct - read from memory address
+                    Bus2_Sel = 2'b10;    // from_memory
+                    reg_write_addr = reg_operand_1[3:0];
+                    reg_write_enable = 1;
+                end
+                else if (LoadStoreOP && IR == 8'h82) begin
+                    // ST direct - write register to memory address
+                    Bus1_Sel = 2'b01;    // reg_data_A to Bus1
+                    write = 1;           // Write to memory
+                end
                 next = Fetch0;
             end
 
@@ -205,35 +338,15 @@ module control_unit (
 
                 case(IR)
                     8'h20: PC_Load = 1; // BRA
-                    8'h21: begin // BCC
-                        if (!CCR_Result[0]) PC_Load = 1; // Carry Clear
-                    end
-                    8'h22: begin // BCS
-                        if (CCR_Result[0]) PC_Load = 1; // Carry Set
-                    end
-                    8'h23: begin // BNE
-                        if (!CCR_Result[2]) PC_Load = 1; // Not Equal
-                    end
-                    8'h24: begin // BEQ
-                        if (CCR_Result[2]) begin
-                            PC_Load = 1; // Equal
-                            // display("[DEBUG] BEQ instruction, Z flag=%b at time %0t", 
-                            // CCR_Result[2], $time);
-                        end
-                    end
-                    8'h25: begin // BPL
-                        if (!CCR_Result[3]) PC_Load = 1; // Positive
-                    end
-                    8'h26: begin // BMI
-                        if (CCR_Result[3]) PC_Load = 1; // Negative
-                    end
-                    8'h27: begin // BVC
-                        if (!CCR_Result[1]) PC_Load = 1; // Overflow Clear
-                    end
-                    8'h28: begin // BVS
-                        if (CCR_Result[1]) PC_Load = 1; // Overflow Set
-                    end
-                    default: PC_Load = 0; // No branch
+                    8'h21: if (!CCR_Result[0]) PC_Load = 1; // BCC
+                    8'h22: if (CCR_Result[0]) PC_Load = 1;  // BCS
+                    8'h23: if (!CCR_Result[2]) PC_Load = 1; // BNE
+                    8'h24: if (CCR_Result[2]) PC_Load = 1;  // BEQ
+                    8'h25: if (!CCR_Result[3]) PC_Load = 1; // BPL
+                    8'h26: if (CCR_Result[3]) PC_Load = 1;  // BMI
+                    8'h27: if (!CCR_Result[1]) PC_Load = 1; // BVC
+                    8'h28: if (CCR_Result[1]) PC_Load = 1;  // BVS
+                    default: PC_Load = 0;
                 endcase
                 
                 next = Fetch0;
