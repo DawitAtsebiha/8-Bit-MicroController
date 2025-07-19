@@ -10,7 +10,7 @@ module data_path(
     input [3:0] ALU_Sel,
     output reg [3:0] CCR_Result,
     input CCR_Load,
-    input [1:0] Bus2_Sel,
+    input [2:0] Bus2_Sel,
     input [1:0] Bus1_Sel,
     input [7:0] from_memory,
     output reg [7:0] to_memory,
@@ -18,7 +18,10 @@ module data_path(
     input [7:0] alu_result,        // ALU result from CPU level
     input [7:0] reg_data_A,        // Register data for Bus1
     input [7:0] reg_data_B,        // Additional register data if needed
-    input [3:0] NZVC               // CCR flags from ALU
+    input [3:0] NZVC,               // CCR flags from ALU
+    input [7:0] immediate_value,    // Immediate value from control unit
+    input [7:0] address_value,      // Address value from control unit
+    input addr_sel                 // 0=PC, 1=MAR for address selection
 );
     
     // Internal registers
@@ -69,16 +72,24 @@ module data_path(
         endcase
         
         case(Bus2_Sel)
-            2'b00: BUS2 = alu_result;    // ALU result from CPU level
-            2'b01: BUS2 = BUS1;
-            2'b10: BUS2 = from_memory;
+            3'b000: BUS2 = alu_result;    // ALU result from CPU level
+            3'b001: BUS2 = BUS1;
+            3'b010: BUS2 = from_memory;
+            3'b011: BUS2 = immediate_value;  // Immediate value from control unit
+            3'b100: BUS2 = address_value;    // Address value from control unit
             default: BUS2 = 8'b0;
         endcase
         
         IR = IR_Reg;
-        address = MAR;
+        // Address selection: use addr_sel to choose between PC and MAR
+        // addr_sel=0 for instruction fetches (use PC)
+        // addr_sel=1 for data operations (use MAR) 
+        address = addr_sel ? MAR : PC;
         to_memory = BUS1;
         bus2_data = BUS2;    // Provide BUS2 data for register writes
+
+        // Debug output for PC tracking
+        // $display("[DATA_PATH] PC=0x%02h, MAR=0x%02h, address=0x%02h, from_memory=0x%02h at time %0t", PC, MAR, address, from_memory, $time);
         CCR_Result = CCR;
     end
 	 
