@@ -20,8 +20,8 @@ module computer_TB;
 
     wire [7:0] PC = dut.cpu1.data_path1.PC;
     wire [7:0] IR = dut.cpu1.data_path1.IR_Reg;
-    wire [7:0] A_Reg = dut.cpu1.data_path1.A_Reg;
-    wire [7:0] B_Reg = dut.cpu1.data_path1.B_Reg;
+    wire [7:0] Reg_A = dut.cpu1.reg_file.registers[0];  // Register A
+    wire [7:0] Reg_B = dut.cpu1.reg_file.registers[1];  // Register B
 
     // Output monitoring signals for GTKWave
     reg [7:0] ROM_output;
@@ -86,7 +86,7 @@ module computer_TB;
     reg     debug_pc = 0;                  // Show Program Counter
     reg     debug_ir = 0;                  // Show Instruction Register
     reg     debug_regs = 0;                // Show A and B registers
-    reg     debug_mem = 0;                 // Show memory accesses
+    reg     debug_mem = 1;                 // Show memory accesses
     reg     debug_io = 1;                  // Show I/O operations (default on)
     reg     debug_state = 0;               // Show CPU state machine
     reg     debug_verbose = 0;             // Extra verbose debugging
@@ -138,6 +138,7 @@ module computer_TB;
         if ($test$plusargs("DEBUG_MEM")) begin
             debug_mem = 1;
             $display("Memory debugging enabled");
+            debug_mem = 1;  // Force enable memory debugging
         end
         
         if ($test$plusargs("DEBUG_STATE")) begin
@@ -201,7 +202,7 @@ module computer_TB;
                     $write("  [Cycle %0d] ", cycles);
                     if (debug_pc) $write("PC=0x%02h ", PC);
                     if (debug_ir) $write("IR=0x%02h ", IR);
-                    if (debug_regs) $write("A=0x%02h B=0x%02h ", A_Reg, B_Reg);
+                    if (debug_regs) $write("A=0x%02h B=0x%02h ", Reg_A, Reg_B);
                     if (debug_state) $write("State=%0d ", dut.cpu1.control_unit1.state);
                     $write("\n");
                 end
@@ -238,6 +239,14 @@ module computer_TB;
             end else begin
                 $display("=== Test '%0s' TIMEOUT after %0d cycles ===", test_name, max_cycles);
                 $display("Final state: PC=0x%02h, IR=0x%02h", PC, IR);
+                $display("Register contents:");
+                $display("  Reg A = 0x%02h (should be 0x84 - final result)", Reg_A);
+                $display("  Reg B = 0x%02h (should be 0x33 - initial value)", Reg_B);
+                $display("Memory contents:");
+                $display("  $50 = 0x%02h (should be 0x50 - register A initial)", dut.memory1.ram1.RAM[8'h50]);
+                $display("  $51 = 0x%02h (should be 0x33 - register B initial)", dut.memory1.ram1.RAM[8'h51]);
+                $display("  $52 = 0x%02h (should be 0x83 - A+B result)", dut.memory1.ram1.RAM[8'h52]);
+                $display("  $53 = 0x%02h (should be 0x84 - final INC result)", dut.memory1.ram1.RAM[8'h53]);
             end
             $display("Total cycles so far: %0d\n", cycles);
     end
@@ -247,7 +256,7 @@ module computer_TB;
         initial begin
             $dumpfile("waves.vcd");
             $dumpvars(clk, reset, cycles);
-            $dumpvars(PC, IR, A_Reg, B_Reg, ROM_output);
+            $dumpvars(PC, IR, Reg_A, Reg_B, ROM_output);
             $dumpvars(io_addr, io_data, io_we);
             $dumpvars(ROM_valid, ROM_sequence_count);
 
