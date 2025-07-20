@@ -637,9 +637,6 @@ class MainWindow(QWidget):
             if self.debug_verbose.isChecked():
                 active.append("Verbose")
             self._log(f"🔍 Debug enabled: {', '.join(active)}")
-            
-        # self._log(f"⏱️ Max cycles: {cycle_value}")                 
-        # self._log(f"🚀 Command: vvp {' '.join(sim_args)}")
         
         # Run simulation
         self.proc_sim.readyReadStandardOutput.connect(
