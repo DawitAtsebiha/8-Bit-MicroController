@@ -1,18 +1,12 @@
 """
 assembly.py
-Self-contained command-line assembler for the 8-bit MicroController.
+Self-contained command-line assembler for the 8-But MightyController.
 
 New in this revision
 ────────────────────
-• Implied-operand instructions (ADD, SUB, AND, OR, INC, DEC) assemble (1-byte op-codes).
-• _determine_mode recognises the *absence* of an operand for IMP mnemonics instead
-  of raising “missing operand”.
-• Pass-1 always reports the real source line number when an error occurs.
-
-Adding soon
-────────────────────
-• Support for more op-codes (e.g. LDX, STX, etc.).
-• Dynamically loading assembled ROM images into the simulator.
+• Support for parameterized instructions (LD reg, operand)
+• 3-byte instruction format for multi-register operations
+• Scalable register system
 
 Usage
 ─────
@@ -33,38 +27,51 @@ class Opcode:
     size: int          
     mode: str           # "IMP", "IMM", "DIR", "REL"
 
-def _op(code: int, mode: str) -> Opcode:
-    return Opcode(code, 1 if mode == "IMP" else 2, mode)
+def _op(code: int, mode: str, size: int = None) -> Opcode:
+    # Size for operations determined by mode:
+    if size is None:
+        size_map = {
+            "IMP": 2,   # Opcode + register (ex. INC A)
+            "IMM": 3,   # Opcode + register + immediate (ex: LD A, #$50)
+            "DIR": 3,   # Opcode + register + address (ex: LD A, $80)
+            "REG": 3,   # Opcode + reg1 + reg2 (ex: ADD A, B)
+            "REL": 2    # Opcode + offset (ex: BRA loop)
+        }
+        size = size_map.get(mode, 2)  # Default to 2 for ALU ops
 
-BRANCHES = {"BRA", "BNE", "BEQ"}
+    return Opcode(code, size, mode)
+
+REGISTERS = {
+    "A": 0, "B": 1, "C": 2, "D": 3,
+    "E": 4, "F": 5, "G": 6, "H": 7,
+    "I": 8, "J": 9, "K": 10, "L": 11,
+    "M": 12, "N": 13, "O": 14, "P": 15
+}
 
 OPCODES: Dict[Tuple[str, str], Opcode] = {
-    # Immediate / direct loads & stores
-    ("LDA",  "IMM"): _op(0x86, "IMM"),
-    ("LDAB", "IMM"): _op(0x88, "IMM"),
-    ("LDA",  "DIR"): _op(0xB6, "DIR"),
-    ("LDAB", "DIR"): _op(0xB7, "DIR"),
-    ("STAA", "DIR"): _op(0x96, "DIR"),
-    ("STAB", "DIR"): _op(0x97, "DIR"),
+    # Load/Store operations
+    ("LD",  "IMM"): _op(0x80, "IMM"),
+    ("LD",  "DIR"): _op(0x81, "DIR"),
+    ("ST",  "DIR"): _op(0x82, "DIR"),
 
     # Branches (relative)
     ("BRA", "REL"): _op(0x20, "REL"),
     ("BNE", "REL"): _op(0x23, "REL"),
     ("BEQ", "REL"): _op(0x24, "REL"),
 
-    # ALU implied-operand instructions
-    ("ADD", "IMP"): _op(0x42, "IMP"),
-    ("SUB", "IMP"): _op(0x43, "IMP"),
-    ("LAND", "IMP"): _op(0x44, "IMP"),
-    ("LOR",  "IMP"): _op(0x45, "IMP"),
-    ("BAND", "IMP"): _op(0x46, "IMP"),
-    ("BOR",  "IMP"): _op(0x47, "IMP"),    
-    ("XOR", "IMP"): _op(0x48, "IMP"),
-    ("INCA", "IMP"): _op(0x49, "IMP"),
-    ("INCB", "IMP"): _op(0x50, "IMP"),
-    ("DECA", "IMP"): _op(0x51, "IMP"),
-    ("DECB", "IMP"): _op(0x52, "IMP"),
+    #ALU Single-register data operations  
+    ("INC", "IMP"): _op(0xA0, "IMP"),        
+    ("DEC", "IMP"): _op(0xA1, "IMP"), 
+
+    # ALU Two-register data operations
+    ("ADD", "REG"): _op(0x90, "REG"),
+    ("SUB", "REG"): _op(0x91, "REG"),
+    ("AND", "REG"): _op(0x92, "REG"),
+    ("OR",  "REG"): _op(0x93, "REG"),
+    ("XOR", "REG"): _op(0x94, "REG"),
 }
+
+BRANCHES = {"BRA", "BNE", "BEQ", "BCC", "BCS", "BPL", "BMI", "BVC", "BVS"}
 
 # regex helpers
 HEX_BYTE  = re.compile(r"^\$([0-9A-Fa-f]{1,2})$")
@@ -82,9 +89,24 @@ def _split_label(line: str) -> Tuple[str | None, str | None]:
     lab, rest = line.split(':', 1)
     return lab.strip(), rest.strip() or None
 
+def _parse_instruction(inst: str) -> Tuple[str, List[str]]:
+    """Parse instruction into mnemonic and operands."""
+    parts = inst.split()
+    if not parts:
+        return "", []
+    
+    mnem = parts[0]
+    if len(parts) == 1:
+        return mnem, []
+    
+    # Join remaining parts and split by comma for multi-operand instructions
+    operand_str = ' '.join(parts[1:])
+    operands = [op.strip() for op in operand_str.split(',')]  # Split by comma and strip whitespace
+    return mnem, operands
+
 # 3.  Two-pass assembler
 def assemble(lines: List[str]) -> bytes:
-    """Convert source lines to a ROM image (byte string)."""
+    # Convert source lines to a ROM image (byte string).
     src = [ln.split(';', 1)[0].rstrip() for ln in lines]  # strip comments
 
     # pass-1: collect labels / constants, compute PC
@@ -109,7 +131,7 @@ def assemble(lines: List[str]) -> bytes:
         if not inst:
             continue  # blank line or label-only
 
-        mnem, *ops = inst.split()
+        mnem, ops = _parse_instruction(inst)
         mode, _ = _determine_mode(mnem, ops, labels, line_no)
         pc += _lookup(mnem, mode, line=line_no).size
 
@@ -123,16 +145,29 @@ def assemble(lines: List[str]) -> bytes:
         if not inst or EQU_RE.match(inst):
             continue
 
-        mnem, *ops = inst.split()
+        mnem, ops = _parse_instruction(inst)
         mode, op_val = _determine_mode(mnem, ops, labels, line_no)
         opc = _lookup(mnem, mode, line=line_no)
-        rom.append(opc.code); pc += 1
+        rom.append(opc.code)
+        pc += 1
 
-        if mode in {"IMM", "DIR"}:
-            rom.append(op_val)
+        if mode == "IMP":            # Single register (INC A, DEC B)
+            reg_num = op_val
+            rom.append(reg_num)
 
-        elif mode == "REL":
+        elif mode == "REG":          # Two registers (ADD A, B)
+            reg1_num, reg2_num = op_val
+            rom.extend([reg1_num, reg2_num])
 
+        elif mode == "IMM":        # Register + immediate value (LD A, #$3F)
+            reg_num, imm_val = op_val
+            rom.extend([reg_num, imm_val])
+
+        elif mode == "DIR":        # Register + direct address (LD A, $80)
+            reg_num, addr_val = op_val
+            rom.extend([reg_num, addr_val])
+
+        elif mode == "REL":        # Relative branch (BRA loop)
             if op_val == "*":
                 off = (-1 & 0xFF)
 
@@ -166,29 +201,77 @@ def _determine_mode(mnem: str, ops: List[str], labels: Dict[str, int], line: int
             return "IMP", None
         raise AsmError(f"Line {line}: missing operand")
 
-    token = ops[0]
+   # Single operand
+    if len(ops) == 1:
+        token = ops[0]
 
-    # special: BRA * (branch to current PC)
-    if token == "*":
-        return "REL", token
+        # Register name (for single-register operations)
+        if token.upper() in REGISTERS:
+            if mnem_u in {"INC", "DEC"}:
+                return "IMP", REGISTERS[token.upper()]
+            else:
+                raise AsmError(f"Line {line}: {mnem_u} does not support single register")
+       # Symbol/label
+        if LABEL_RE.match(token):
+            if mnem_u in BRANCHES:
+                return "REL", token
+            if token not in labels:
+                raise AsmError(f"Line {line}: unknown symbol '{token}'")
+            return "DIR", labels[token]
 
-    # immediate e.g.  #$3F
-    if (m := HEX_IMM.match(token)):
-        return "IMM", int(m.group(1), 16)
+        raise AsmError(f"Line {line}: malformed operand '{token}'")
 
-    # direct e.g.  $80
-    if (m := HEX_BYTE.match(token)):
-        return "DIR", int(m.group(1), 16)
+    # Two operands - NEW PARAMETERIZED FORMAT
+    elif len(ops) == 2:
+        reg_token = ops[0]
+        val_token = ops[1]
 
-    # symbol / label
-    if LABEL_RE.match(token):
-        if mnem_u in BRANCHES:         # relative branch target
-            return "REL", token
-        if token not in labels:
-            raise AsmError(f"Line {line}: unknown symbol '{token}'")
-        return "DIR", labels[token]
+        # First operand must be a register
+        if reg_token.upper() not in REGISTERS:
+            raise AsmError(f"Line {line}: first operand must be a register, got '{reg_token}'")
+        
+        reg_num = REGISTERS[reg_token.upper()]
 
-    raise AsmError(f"Line {line}: malformed operand '{token}'")
+        # Second operand determines the addressing mode
+        if val_token.upper() in REGISTERS:
+            # Register-to-register operation
+            reg2_num = REGISTERS[val_token.upper()]
+            if mnem_u in {"ADD", "SUB", "AND", "OR", "XOR"}:
+                return "REG", (reg_num, reg2_num)
+            else:
+                raise AsmError(f"Line {line}: {mnem_u} does not support register-to-register")
+        
+        elif (m := HEX_IMM.match(val_token)):
+            # Immediate value
+            imm_val = int(m.group(1), 16)
+            if mnem_u == "LD":
+                return "IMM", (reg_num, imm_val)
+            else:
+                raise AsmError(f"Line {line}: {mnem_u} does not support immediate addressing")
+        
+        elif (m := HEX_BYTE.match(val_token)):
+            # Direct address
+            addr_val = int(m.group(1), 16)
+            if mnem_u in {"LD", "ST"}:
+                return "DIR", (reg_num, addr_val)
+            else:
+                raise AsmError(f"Line {line}: {mnem_u} does not support direct addressing")
+        
+        elif LABEL_RE.match(val_token):
+            # Symbol/label for direct addressing
+            if val_token not in labels:
+                raise AsmError(f"Line {line}: unknown symbol '{val_token}'")
+            addr_val = labels[val_token]
+            if mnem_u in {"LD", "ST"}:
+                return "DIR", (reg_num, addr_val)
+            else:
+                raise AsmError(f"Line {line}: {mnem_u} does not support direct addressing")
+        
+        else:
+            raise AsmError(f"Line {line}: malformed second operand '{val_token}'")
+
+    else:
+        raise AsmError(f"Line {line}: too many operands")
 
 # 5.  Lookup helper
 def _lookup(mnem: str, mode: str, *, line: int) -> Opcode:
@@ -211,10 +294,10 @@ def assemble_cmd(asm_path: str, out: str):
     # Auto-generate output path if not specified
     if out is None:
         asm_file = pathlib.Path(asm_path)
-        out = f"ROM Programs/build/{asm_file.stem}.bin"
+        out = f"Programs/build/{asm_file.stem}.bin"
     
-    # Ensure ROM Programs/build directory exists
-    build_dir = pathlib.Path("ROM Programs/build")
+    # Ensure Programs/build directory exists
+    build_dir = pathlib.Path("Programs/build")
     build_dir.mkdir(parents=True, exist_ok=True)
     
     lines = pathlib.Path(asm_path).read_text(encoding="utf-8").splitlines()
