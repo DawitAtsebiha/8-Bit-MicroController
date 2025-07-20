@@ -22,7 +22,7 @@
   - [Command Line](#command-line)
 - [Simulation & Debugging](#simulation--debugging)
 - [Sample Programs](#sample-programs)
-- [Prerequisites & Installation](#prerequisites--installation)
+- [Prerequisites & Installation](#prerequisites-installation)
 - [Roadmap](#roadmap)
 
 ## Overview
@@ -139,15 +139,13 @@ The **control_unit.sv** drives the CPU through **17 one‑hot states**. A regist
 | 15 | Branch2     | Flush pipeline & resume fetch        |
 
 > A visual representation of the transitions can be found below. Arrows correspond to *next‑state* paths evaluated inside `control_unit.sv`.
-
-![Control Unit State Diagram](8-But MightyController\Documentation\State Machine Diagrams\8-But MightyController StateDiagram.jpg)
+![8-But MightyController StateDiagram](https://github.com/user-attachments/assets/488a753f-e519-4447-a7a3-94b77992899e)
 
 ### One‑Hot Encoding Matrix
 Each row shows the 17‑bit state register where `1` marks the active state. For example, row `Fetch0` asserts bit‑16 while all others are 0.
+<img width="1288" height="577" alt="8-But MightyController StateDiagramEncoding" src="https://github.com/user-attachments/assets/7dd33d20-ff8b-4c7d-93d3-a294651ec3fe" />
 
-![State Encoding Table](8-But MightyController\Documentation\State Machine Diagrams\8-But MightyController StateDiagramEncoding.png)
-
-This explicit encoding eliminates ripple decoders and allows single‑cycle, combinational next‑state logic—important for meeting timing once the design is ported to an FPGA.
+This explicit encoding eliminates ripple decoders and allows single‑cycle, combinational next‑state logic, which is important for meeting timing once the design is ported to an FPGA.
 
 ## Architecture
 
@@ -252,12 +250,9 @@ choco install python iverilog gtkwave
 pip install PyQt6 click
 ```
 
-## Roadmap
-* **Dynamic ROM loading** — write `.bin` into FPGA block‑RAM at reset  
-* **Pipeline the ALU** — 2‑stage for 2× throughput  
-* **Add flags & conditional branches** (`BCC`, `BPL`, etc.)  
+## Roadmap (Want to add)
+* **Add more operations, and conditional branches** (`MUL`, `JMP`, `BPL`, etc.)  
 * **Write synthesis constraints** for an entry‑level FPGA board (IceBreaker)  
-* **Unit tests** for assembler lexer/parser
 
 Contributions & bug reports welcome!
 
