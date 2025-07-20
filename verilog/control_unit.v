@@ -1,6 +1,7 @@
 module control_unit (
     input clk,
     input reset,
+    input debug_inner,
     input [7:0] IR,
     input [7:0] from_memory,
     input [3:0] CCR_Result,
@@ -14,27 +15,34 @@ module control_unit (
     output reg reg_write_enable,
     output reg [3:0] ALU_Sel,
     output reg CCR_Load,
-    output reg [1:0] Bus2_Sel,
+    output reg [2:0] Bus2_Sel,
     output reg [1:0] Bus1_Sel,
     output reg ALU_B_Sel,
-    output reg write
+    output reg write,
+    output reg [7:0] immediate_out,
+    output reg [7:0] address_out,
+    output reg addr_sel
 );
 
-    parameter [4:0] 
-        Fetch0 = 0, Fetch1 = 1, Fetch2 = 2, Decode = 3,
-        LoadStore0 = 4, LoadStore1 = 5, LoadStore2 = 6, LoadStore3 = 7, LoadStore4 = 8, LoadStore5 = 9,
-        Data0 = 10, Data1 = 11, Data2 = 12, Data3 = 13, 
-        Branch0 = 14, Branch1 = 15, Branch2 = 16;
+    parameter [5:0] 
+        Fetch0 = 0, Fetch1 = 1, Fetch2 = 2, 
+        Decode = 10, Execute = 11,
+        LoadStore0 = 20, LoadStore1 = 21, LoadStore2 = 22, LoadStore3 = 23, LoadStore4 = 24, LoadStore5 = 25,
+        Data0 = 30, Data1 = 31, Data2 = 32, Data3 = 33,
+        Branch0 = 40, Branch1 = 41, Branch2 = 42;
 
-    reg [4:0] state, next;
+    reg [5:0] state, next;
     reg LoadStoreOP, DataOP, BranchOP;
     reg [7:0] reg_operand_1, reg_operand_2; // First (destination) and Second (source) register operands
+    reg [7:0] immediate_value; // Storage for immediate values
     
     always @(posedge clk or negedge reset) begin
         if (!reset) begin
             state <= Fetch0;
             reg_operand_1 <= 8'h00;
             reg_operand_2 <= 8'h00;
+            immediate_value <= 8'h00;
+            addr_sel <= 1'b0;  // Default to PC addressing
 
         end else begin
             state <= next;
@@ -42,15 +50,25 @@ module control_unit (
             // Capture operands as they're fetched
             case(state)
                 LoadStore2: begin
-                    reg_operand_1 <= from_memory;  // First operand (register for load/store)
+                    if (LoadStoreOP) begin
+                        reg_operand_1 <= from_memory;  // Register operand for load/store
+                        if (debug_inner) $display("[CTRL] Capturing register operand: from_memory=0x%02h at time %0t", from_memory, $time);
+                    end else if (DataOP) begin
+                        reg_operand_2 <= from_memory;  // Second operand for two-register data ops
+                        if (debug_inner) $display("[CTRL] LoadStore2: Capturing second operand from_memory=0x%02h at time %0t", from_memory, $time);
+                    end
+                end
+                LoadStore4: begin
+                    if (LoadStoreOP && IR == 8'h80) begin
+                        // Don't capture here - immediate will be read in LoadStore4
+                    end else if (LoadStoreOP && (IR == 8'h81 || IR == 8'h82)) begin
+                        reg_operand_2 <= from_memory;  // Capture address for LD/ST direct
+                    end
+                    // Remove DataOP capture here - second operand already captured in LoadStore2
                 end
                 Data2: begin
                     reg_operand_1 <= from_memory;  // First register for data ops
-                end
-                LoadStore4: begin
-                    if (DataOP) begin
-                        reg_operand_2 <= from_memory;  // Second register for data ops
-                    end
+                    if (debug_inner) $display("[CTRL] Data2: Capturing first operand from_memory=0x%02h at time %0t", from_memory, $time);
                 end
             endcase
         end
@@ -75,30 +93,44 @@ module control_unit (
         // Defaults
         next = state;
         {IR_Load, MAR_Load, PC_Load, PC_Inc, reg_write_enable, 
-         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, ALU_B_Sel, write} = 15'b0;
+         ALU_Sel, CCR_Load, Bus2_Sel, Bus1_Sel, ALU_B_Sel, write} = 18'b0;
+        immediate_out = immediate_value;  // Output captured immediate value
+        address_out = reg_operand_2;     // Output captured address value
+        addr_sel = 1'b0;                 // Default to PC addressing for instruction fetches
 
         {reg_read_addr_A, reg_read_addr_B, reg_write_addr} = 12'b0;
 
         case(state)
             Fetch0: begin
                 Bus1_Sel = 2'b00;
-                Bus2_Sel = 2'b01;
+                Bus2_Sel = 3'b001;
                 MAR_Load = 1;
+                if (debug_inner) $display("[CTRL] Fetch0: Setting MAR to PC for instruction fetch at time %0t", $time);
                 next = Fetch1;
             end
 
             Fetch1: begin
-                PC_Inc = 1;
+                // Don't increment PC yet - wait until instruction is loaded
+                if (debug_inner) $display("[CTRL] Fetch1: Waiting for memory stabilization at time %0t", $time);
                 next = Fetch2;
             end
 
             Fetch2: begin
-                Bus2_Sel = 2'b10;
-                IR_Load = 1;
+                // Wait one cycle for ROM synchronization
+                if (debug_inner) $display("[CTRL] Fetch2: Waiting for ROM sync, from_memory=0x%02h at time %0t", from_memory, $time);
                 next = Decode;
             end
 
             Decode: begin 
+                Bus2_Sel = 3'b010;  // Select from_memory
+                IR_Load = 1;        // Load instruction after ROM has stabilized
+                PC_Inc = 1;         // NOW increment PC to point to operands
+                if (debug_inner) $display("[CTRL] Decode (IR Load): Loading instruction from memory: 0x%02h, incrementing PC at time %0t", from_memory, $time);
+                next = Execute;     // Go to Execute state for actual decode logic
+            end
+
+            Execute: begin 
+                if (debug_inner) $display("[CTRL] Execute: IR=0x%02h, LoadStoreOP=%b, DataOP=%b, BranchOP=%b at time %0t", IR, LoadStoreOP, DataOP, BranchOP, $time);
                 if (LoadStoreOP)       
                     next = LoadStore0;
 
@@ -119,7 +151,7 @@ module control_unit (
 
             Data0: begin
                 Bus1_Sel = 2'b00;    // PC
-                Bus2_Sel = 2'b01;    // Bus1
+                Bus2_Sel = 3'b001;    // Bus1
                 MAR_Load = 1;
                 next = Data1;
             end
@@ -130,36 +162,42 @@ module control_unit (
             end
 
             Data2: begin
-                Bus2_Sel = 2'b10;         
+                Bus2_Sel = 3'b010;         
+                addr_sel = 1'b1;     // Use MAR for first operand access
                 next = Data3;
             end
 
             Data3: begin
                 Bus1_Sel = 2'b00;
-                Bus2_Sel = 2'b01;  
+                Bus2_Sel = 3'b001;  
                 MAR_Load = 1;
                 next = LoadStore1; // Fetches second register operand
             end
 
             LoadStore0: begin
-                Bus1_Sel = 2'b00;
-                Bus2_Sel = 2'b01;
-                MAR_Load = 1;
+                Bus1_Sel = 2'b00;    // PC on Bus1 (should now point to register operand)
+                Bus2_Sel = 3'b001;   // Bus1 on Bus2
+                MAR_Load = 1;        // Load PC into MAR to fetch register operand
+                if (debug_inner) $display("[CTRL] LoadStore0: Setting MAR to PC to fetch register operand at time %0t", $time);
                 next = LoadStore1;
             end
 
             LoadStore1: begin
-                PC_Inc = 1;
+                // Don't increment PC yet - need to capture register operand first
+                if (debug_inner) $display("[CTRL] LoadStore1: Waiting for register operand memory stabilization at time %0t", $time);
                 next = LoadStore2;
             end
 
             LoadStore2: begin
-                Bus2_Sel = 2'b10;
+                Bus2_Sel = 3'b010;
+                PC_Inc = 1;          // NOW increment PC after setting up register operand capture
+                if (debug_inner) $display("[CTRL] LoadStore2: IR=0x%02h, from_memory=0x%02h, incrementing PC at time %0t", IR, from_memory, $time);
 
                 if (DataOP && IR[7:4] == 4'hA) begin // All single-register operations (INC, DEC)
                     CCR_Load = 1; 
                     Bus1_Sel = 2'b01;
-                    Bus2_Sel = 2'b00;
+                    Bus2_Sel = 3'b000;
+                    addr_sel = 1'b1;     // Use MAR for operand access
 
                     case(IR)
                         8'hA0: begin  // INC reg
@@ -182,8 +220,8 @@ module control_unit (
                 
                 end else if (LoadStoreOP) begin // For Load and Store operations
                     case(IR)
-                        8'h80: begin  // LD immediate
-                            next = LoadStore3;  // Need to get immediate value
+                        8'h80: begin  // LD immediate - PC already incremented in Decode
+                            next = LoadStore3;
                         end
                         8'h81: begin  // LD direct
                             next = LoadStore3;  // Need to get address
@@ -194,79 +232,75 @@ module control_unit (
                         default: next = Fetch0;
                     endcase
 
-                end else if (DataOP && IR[7:4] == 4'h9) // For two-register data operations
+                end else if (DataOP && IR[7:4] == 4'h9) begin // For two-register data operations
+                    addr_sel = 1'b1;     // Use MAR for second operand access
                     next = LoadStore3;
+                end
 
                 else
                     next = Fetch0;
             end
 
             LoadStore3: begin
-                Bus1_Sel = 2'b00;
-                Bus2_Sel = 2'b01;
-                MAR_Load = 1;
-                next = LoadStore4;
+                if (IR == 8'h80) begin  // LD immediate - need to set up address for immediate value
+                    Bus1_Sel = 2'b00;    // PC on Bus1 (should point to immediate value)
+                    Bus2_Sel = 3'b001;   // Bus1 on Bus2
+                    MAR_Load = 1;        // Load PC into MAR to fetch immediate
+                    next = LoadStore4;
+                end else begin  // LD/ST direct - load address into MAR
+                    Bus2_Sel = 3'b100;  // Select captured address value
+                    MAR_Load = 1;
+                    next = LoadStore4;
+                end
             end
 
             LoadStore4: begin
-                PC_Inc = 1;
-                Bus2_Sel = 2'b10;
-
-                if (DataOP && IR[7:4] == 4'h9) begin // 2nd register operand captured in clocked block
+                if (IR == 8'h80) begin  // LD immediate - now ROM output should be stable
+                    if (debug_inner) $display("[CTRL] LD immediate in LoadStore4: reg=%0d, from_memory=0x%02h at time %0t", reg_operand_1[3:0], from_memory, $time);
+                    reg_write_addr = reg_operand_1[3:0];
+                    reg_write_enable = 1;
+                    Bus2_Sel = 3'b010;  // Use from_memory for immediate value
+                    PC_Inc = 1;         // Increment PC to point to next instruction
+                    next = Fetch0;
+                end else if (DataOP && IR[7:4] == 4'h9) begin // 2nd register operand captured in clocked block
+                    PC_Inc = 1;
                     next = LoadStore5;
                 
                 end else if (LoadStoreOP) begin
                     case(IR)
-                        8'h80: begin  // LD immediate
-                            reg_write_addr = reg_operand_1[3:0];
-                            reg_write_enable = 1;
-                            next = Fetch0;
-                        end
-
                         8'h81: begin  // LD direct
-                            MAR_Load = 1;  
+                            PC_Inc = 1;  // Increment PC past address
                             next = LoadStore5;
                         end
 
                         8'h82: begin  // ST direct
-                            MAR_Load = 1;  
                             reg_read_addr_A = reg_operand_1[3:0];
                             Bus1_Sel = 2'b01;
                             write = 1;
+                            PC_Inc = 1;  // Increment PC past address
                             next = Fetch0;
                         end
                         default: next = Fetch0;
                     endcase
 
-                end else if (LoadStoreOP) begin
-                    case(IR)
-                        8'h80: begin  // LD immediate
-                            reg_write_addr = reg_operand_1[3:0];
-                            reg_write_enable = 1;
-                            next = Fetch0;
-                        end
-                        8'h81: begin  // LD direct
-                            MAR_Load = 1;    // Load address
-                            next = LoadStore5;
-                        end
-                        8'h82: begin  // ST direct
-                            MAR_Load = 1;  
-                            reg_read_addr_A = reg_operand_1[3:0];
-                            next = LoadStore5;  // Go to next state to complete the write
-                        end
-                        default: next = Fetch0;
-                    endcase
                 end else next = Fetch0;
             end
 
             LoadStore5: begin
-                if (DataOP && IR[7:4] == 4'h9) begin // Execute two-register data operations
+                if (IR == 8'h80) begin  // LD immediate - complete the load operation
+                    if (debug_inner) $display("[CTRL] LD immediate in LoadStore5: reg=%0d, from_memory=0x%02h at time %0t", reg_operand_1[3:0], from_memory, $time);
+                    reg_write_addr = reg_operand_1[3:0];
+                    reg_write_enable = 1;
+                    Bus2_Sel = 3'b010;  // Use from_memory for immediate value
+                    next = Fetch0;
+                end else if (DataOP && IR[7:4] == 4'h9) begin // Execute two-register data operations
                     CCR_Load = 1;
                     Bus1_Sel = 2'b01;
-                    Bus2_Sel = 2'b00;
+                    Bus2_Sel = 3'b000;
 
                     case(IR)
                         8'h90: begin  // ADD reg1, reg2
+                            if (debug_inner) $display("[CTRL] ADD: reg_operand_1=0x%02h, reg_operand_2=0x%02h at time %0t", reg_operand_1, reg_operand_2, $time);
                             reg_read_addr_A = reg_operand_1[3:0];
                             reg_read_addr_B = reg_operand_2[3:0];
                             reg_write_addr = reg_operand_1[3:0];
@@ -306,12 +340,14 @@ module control_unit (
                 end
                 else if (LoadStoreOP && IR == 8'h81) begin
                     // LD direct - read from memory address
-                    Bus2_Sel = 2'b10;    // from_memory
+                    addr_sel = 1'b1;     // Use MAR for data memory access
+                    Bus2_Sel = 3'b010;    // from_memory
                     reg_write_addr = reg_operand_1[3:0];
                     reg_write_enable = 1;
                 end
                 else if (LoadStoreOP && IR == 8'h82) begin
                     // ST direct - write register to memory address
+                    addr_sel = 1'b1;     // Use MAR for data memory access
                     Bus1_Sel = 2'b01;    // reg_data_A to Bus1
                     write = 1;           // Write to memory
                 end
@@ -320,7 +356,7 @@ module control_unit (
 
             Branch0: begin
                 Bus1_Sel = 2'b00;  // PC (pointing to offset) on Bus1
-                Bus2_Sel = 2'b01;  // Bus1 on Bus2
+                Bus2_Sel = 3'b001;  // Bus1 on Bus2
                 MAR_Load = 1;      // Load offset address into MAR
                 next = Branch1;
             end
@@ -332,7 +368,7 @@ module control_unit (
 
             Branch2: begin
                 Bus1_Sel = 2'b00;  // PC on Bus1
-                Bus2_Sel = 2'b10;  // from_memory (branch offset) on Bus2
+                Bus2_Sel = 3'b010;  // from_memory (branch offset) on Bus2
                 ALU_Sel = 4'd0;    // ADD operation (PC + offset from memory)
                 ALU_B_Sel = 1;     // Use BUS2 as ALU B input (branch offset)
 
