@@ -140,12 +140,12 @@ The **control_unit.sv** drives the CPU through **17 one‑hot states**. A regist
 
 > A visual representation of the transitions can be found below. Arrows correspond to *next‑state* paths evaluated inside `control_unit.sv`.
 
-![Control Unit State Diagram](Documentation/8-But MightyController StateDiagram.jpg)
+![Control Unit State Diagram](8-But MightyController\Documentation\State Machine Diagrams\8-But MightyController StateDiagram.jpg)
 
 ### One‑Hot Encoding Matrix
 Each row shows the 17‑bit state register where `1` marks the active state. For example, row `Fetch0` asserts bit‑16 while all others are 0.
 
-![State Encoding Table](Documentation/8-But MightyController StateDiagramEncoding.png)
+![State Encoding Table](8-But MightyController\Documentation\State Machine Diagrams\8-But MightyController StateDiagramEncoding.png)
 
 This explicit encoding eliminates ripple decoders and allows single‑cycle, combinational next‑state logic—important for meeting timing once the design is ported to an FPGA.
 
