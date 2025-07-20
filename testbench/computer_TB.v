@@ -12,6 +12,7 @@ module computer_TB;
     computer dut (
         .clk     (clk),
         .reset   (reset),
+        .debug_inner (debug_inner),
         .io_data (io_data),
         .io_addr (io_addr),
         .io_oe   (io_oe),
@@ -49,6 +50,7 @@ module computer_TB;
                 1:  state_name = "Fetch1";
                 2:  state_name = "Fetch2";
                 10: state_name = "Decode";
+                11: state_name = "Execute";
                 20: state_name = "LoadStore0";
                 21: state_name = "LoadStore1";
                 22: state_name = "LoadStore2";
@@ -66,24 +68,6 @@ module computer_TB;
             endcase
         end
     endfunction
-    
-    // Monitor for enhanced debugging (moved to test loop)
-    // always @(posedge clk) begin
-    //     if (!reset && debug_enable && cycles >= debug_start_cycle && 
-    //        (debug_end_cycle == -1 || cycles <= debug_end_cycle)) begin
-    //         
-    //         // Build debug message
-    //         $write("[Cycle %0d] ", cycles);
-    //         
-    //         if (debug_pc) $write("PC=0x%02h ", PC);
-    //         if (debug_ir) $write("IR=0x%02h ", IR);
-    //         if (debug_regs) $write("A=0x%02h B=0x%02h ", A_Reg, B_Reg);
-    //         if (debug_state) $write("State=%0d ", dut.cpu1.control_unit1.state);
-    //         
-    //         // Always show if anything was printed
-    //         if (debug_pc || debug_ir || debug_regs || debug_state) $write("\n");
-    //     end
-    // end
 
         task load_rom;
             input [8*64-1:0] filename;
@@ -115,13 +99,14 @@ module computer_TB;
     reg integer debug_cycles = 1000;      // Default to 1000 cycles if not specified
     
     // Enhanced debugging parameters
-    reg     debug_enable = 1;              // Enable/disable debug output (enabled by default)
+    reg     debug_enable = 0;              // Enable/disable debug output (disabled by default - GUI controls this)
     reg     debug_pc = 0;                  // Show Program Counter
     reg     debug_ir = 0;                  // Show Instruction Register
     reg     debug_regs = 0;                // Show A and B registers
-    reg     debug_mem = 1;                 // Show memory accesses
-    reg     debug_io = 1;                  // Show I/O operations (default on)
+    reg     debug_mem = 0;                 // Show memory accesses (disabled by default)
+    reg     debug_io = 1;                  // Show I/O operations (always on for program output)
     reg     debug_state = 0;               // Show CPU state machine
+    reg     debug_inner = 0;               // Show inner workings (register writes, detailed state info)
     reg     debug_verbose = 0;             // Extra verbose debugging
     integer debug_start_cycle = 0;        // Start debugging from this cycle
     integer debug_end_cycle = -1;         // End debugging at this cycle (-1 = no limit)
@@ -174,6 +159,16 @@ module computer_TB;
             debug_mem = 1;  // Force enable memory debugging
         end
         
+        if ($test$plusargs("DEBUG_IO")) begin
+            debug_io = 1;
+            $display("I/O debugging enabled");
+        end
+        
+        if ($test$plusargs("DEBUG_INNER")) begin
+            debug_inner = 1;
+            $display("Inner workings debugging enabled");
+        end
+        
         if ($test$plusargs("DEBUG_STATE")) begin
             debug_state = 1;
             $display("State machine debugging enabled");
@@ -186,6 +181,7 @@ module computer_TB;
             debug_ir = 1;
             debug_regs = 1;
             debug_mem = 1;
+            debug_inner = 1;
             debug_state = 1;
             $display("Verbose debugging enabled (all debug options on)");
         end
@@ -227,8 +223,8 @@ module computer_TB;
         for (n = 0; n < max_cycles && !done; n = n + 1) begin
             @(posedge clk); cycles = cycles + 1;
             
-            // Monitor register changes - show values when registers are written (only if debug enabled)
-            if (dut.cpu1.reg_write_enable && debug_enable && debug_regs) begin
+            // Monitor register changes - show values when registers are written (only if inner workings enabled)
+            if (dut.cpu1.reg_write_enable && debug_enable && debug_inner) begin
                 $display("  [Cycle %0d] REG_WRITE: R%0d = 0x%02h", 
                          cycles, dut.cpu1.reg_write_addr, dut.cpu1.reg_write_data);
                 $display("                Current register values: A=0x%02h B=0x%02h C=0x%02h D=0x%02h", 
@@ -240,8 +236,8 @@ module computer_TB;
                (debug_end_cycle == -1 || cycles <= debug_end_cycle)) begin
                 
                 if (debug_pc || debug_ir || debug_regs || debug_state) begin
-                    if (debug_regs) begin
-                        // Show detailed register display with cycle info
+                    if (debug_inner) begin
+                        // Show detailed register display with cycle info (inner workings)
                         $write("  [Cycle %0d] ", cycles);
                         if (debug_pc) $write("PC=0x%02h ", PC);
                         if (debug_ir) $write("IR=0x%02h ", IR);
@@ -290,16 +286,8 @@ module computer_TB;
             end else begin
                 $display("=== Test '%0s' TIMEOUT after %0d cycles ===", test_name, max_cycles);
                 $display("Final state: PC=0x%02h, IR=0x%02h", PC, IR);
-                $display("Register contents:");
-                $display("  Reg A = 0x%02h (should be 0x84 - final result)", Reg_A);
-                $display("  Reg B = 0x%02h (should be 0x33 - initial value)", Reg_B);
                 $display("Full register file contents:");
                 dut.cpu1.reg_file.debug_print_registers();
-                $display("Memory contents:");
-                $display("  $50 = 0x%02h (should be 0x50 - register A initial)", dut.memory1.ram1.RAM[8'h50]);
-                $display("  $51 = 0x%02h (should be 0x33 - register B initial)", dut.memory1.ram1.RAM[8'h51]);
-                $display("  $52 = 0x%02h (should be 0x83 - A+B result)", dut.memory1.ram1.RAM[8'h52]);
-                $display("  $53 = 0x%02h (should be 0x84 - final INC result)", dut.memory1.ram1.RAM[8'h53]);
             end
             $display("Total cycles so far: %0d\n", cycles);
     end
@@ -340,6 +328,7 @@ module computer_TB;
                 if (debug_regs) $display("  - A and B Registers");
                 if (debug_mem) $display("  - Memory accesses");
                 if (debug_io) $display("  - I/O operations");
+                if (debug_inner) $display("  - Inner workings (detailed CPU operations)");
                 if (debug_state) $display("  - CPU state machine");
                 if (debug_verbose) $display("  - Verbose mode");
                 if (debug_start_cycle > 0) $display("  - Debug starts at cycle %0d", debug_start_cycle);
