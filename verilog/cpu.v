@@ -1,6 +1,7 @@
 module cpu(
     input clk,
     input reset,
+    input debug_inner,
     output [7:0] address,
     input [7:0] from_memory,
     output write,
@@ -36,6 +37,7 @@ module cpu(
     control_unit control_unit1 (
         .clk(clk),
         .reset(reset),
+        .debug_inner(debug_inner),
         .IR_Load(IR_Load),
         .IR(IR),
         .MAR_Load(MAR_Load),
@@ -88,6 +90,7 @@ module cpu(
     register_file reg_file (
         .clk(clk),
         .reset(reset),
+        .debug_inner(debug_inner),
         .read_addr_A(reg_read_addr_A),
         .read_addr_B(reg_read_addr_B),
         .write_addr(reg_write_addr),

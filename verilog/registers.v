@@ -1,6 +1,7 @@
 module register_file(
     input clk,
     input reset,
+    input debug_inner,
     input [3:0] read_addr_A,
     input [3:0] read_addr_B,
     input [3:0] write_addr,
@@ -19,7 +20,7 @@ module register_file(
                 registers[i] <= 8'h00;
             end
         end else if (write_enable) begin
-            $display("[REG_FILE] Writing 0x%02h to register %0d at time %0t", write_data, write_addr, $time);
+            if (debug_inner) $display("[REG_FILE] Writing 0x%02h to register %0d at time %0t", write_data, write_addr, $time);
             registers[write_addr] <= write_data;
         end
     end
