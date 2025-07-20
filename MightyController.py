@@ -34,7 +34,7 @@ class MainWindow(QWidget):
         self._setup_processes()
         self._connect_signals()
         self._populate_existing_programs()
-        self._set_status("Ready", "#27ae60")
+        self._set_status("Ready", "success")
 
     def _get_styles(self):
         return """
@@ -352,14 +352,14 @@ class MainWindow(QWidget):
         self.debug_enable = QCheckBox("Enable Debug")
         self.debug_pc = QCheckBox("Show PC")
         self.debug_ir = QCheckBox("Show IR")
-        self.debug_regs = QCheckBox("Show A/B Regs")
+        self.debug_regs = QCheckBox("Show Register Values")
         self.debug_mem = QCheckBox("Show Memory")
-        self.debug_io = QCheckBox("Show I/O")
+        self.debug_inner_workings = QCheckBox("See Inner Workings")
         self.debug_state = QCheckBox("Show State")
         self.debug_verbose = QCheckBox("Verbose Mode")
         
         # Set defaults
-        self.debug_io.setChecked(True)  # I/O debugging on by default
+        self.debug_inner_workings.setChecked(False)  # Default to off since it shows detailed internal operations
         
         # Arrange in 2 columns with better sizing
         debug_checks_layout.addWidget(self.debug_enable, 0, 0)
@@ -367,7 +367,7 @@ class MainWindow(QWidget):
         debug_checks_layout.addWidget(self.debug_ir, 1, 0)
         debug_checks_layout.addWidget(self.debug_regs, 1, 1)
         debug_checks_layout.addWidget(self.debug_mem, 2, 0)
-        debug_checks_layout.addWidget(self.debug_io, 2, 1)
+        debug_checks_layout.addWidget(self.debug_inner_workings, 2, 1)
         debug_checks_layout.addWidget(self.debug_state, 3, 0)
         debug_checks_layout.addWidget(self.debug_verbose, 3, 1)
         
@@ -439,7 +439,7 @@ class MainWindow(QWidget):
 
     def _populate_existing_programs(self):
         """Find existing binary files and populate dropdown"""
-        build_dir = Path("ROM Programs/build")
+        build_dir = Path("Programs/build")
         if not build_dir.exists():
             build_dir.mkdir(parents=True, exist_ok=True)
             
@@ -467,7 +467,7 @@ class MainWindow(QWidget):
         self.debug_ir.setChecked(False)
         self.debug_regs.setChecked(False)
         self.debug_mem.setChecked(False)
-        self.debug_io.setChecked(True)
+        self.debug_inner_workings.setChecked(False)
         self.debug_state.setChecked(False)
         self.debug_verbose.setChecked(False)
 
@@ -478,7 +478,7 @@ class MainWindow(QWidget):
         self.debug_ir.setChecked(True)
         self.debug_regs.setChecked(True)
         self.debug_mem.setChecked(True)
-        self.debug_io.setChecked(True)
+        self.debug_inner_workings.setChecked(True)
         self.debug_state.setChecked(True)
         self.debug_verbose.setChecked(False)  # Don't auto-enable verbose
 
@@ -490,7 +490,7 @@ class MainWindow(QWidget):
             self.debug_ir.setChecked(True)
             self.debug_regs.setChecked(True)
             self.debug_mem.setChecked(True)
-            self.debug_io.setChecked(True)
+            self.debug_inner_workings.setChecked(True)
             self.debug_state.setChecked(True)
 
     def _set_status(self, msg: str, status_type: str = "normal"):
@@ -519,14 +519,17 @@ class MainWindow(QWidget):
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
-    def _log(self, msg: str):
+    def _log(self, msg: str, emoji: str = ""):
+        """Log a message to the console with optional emoji prefix"""
+        if emoji:
+            msg = f"{emoji} {msg}"
         self.console.moveCursor(QTextCursor.MoveOperation.End)
         self.console.insertPlainText(msg + "\n")
         self.console.moveCursor(QTextCursor.MoveOperation.End)
 
     def _select_file(self):
         file, _ = QFileDialog.getOpenFileName(
-            self, "Select Assembly File", "ROM Programs/asm", "Assembly Files (*.asm);;Text Files (*.txt);;All Files (*)"
+            self, "Select Assembly File", "Programs/asm", "Assembly Files (*.asm);;Text Files (*.txt);;All Files (*)"
         )
         if file:
             self.has_file = True
@@ -541,14 +544,15 @@ class MainWindow(QWidget):
             self._set_status("File selected", "#27ae60")
 
     def _assemble(self):
+        """Assemble the selected ASM file"""
         if not self.has_file:
             return
             
         self.console.clear()
-        self._log("🔧 Assembling...")
-        self._set_status("Assembling...", "#f39c12")
+        self._log("Assembling...")
+        self._set_status("Assembling...", "working")
         
-        out_bin = f"ROM Programs/build/{self.file_name}.bin"
+        out_bin = f"Programs/build/{self.file_name}.bin"
         
         self.proc_asm.readyReadStandardOutput.connect(
             lambda: self._log(bytes(self.proc_asm.readAllStandardOutput()).decode(errors="ignore").strip())
@@ -557,17 +561,25 @@ class MainWindow(QWidget):
         self.proc_asm.start("python", ["software/assembler.py", "assemble", self.selected_file, "-o", out_bin])
 
     def _on_assemble_done(self):
+        """Handle assembly completion"""
         ok = self.proc_asm.exitCode() == 0
         self._set_status("Assembly Complete ✅" if ok else "Assembly Failed ❌", 
-                        "#27ae60" if ok else "#e74c3c")
+                        "success" if ok else "error")
         if ok:
-            self._log("✅ Assembly successful!")
+            self._log("Assembly successful!")
             self.simulate_btn.setEnabled(True)
             self._populate_existing_programs()  # Refresh dropdown
         else:
-            self._log("❌ Assembly failed!")
-        self.proc_asm.readyReadStandardOutput.disconnect()
-        self.proc_asm.finished.disconnect()
+            self._log("Assembly failed!")
+        self._disconnect_process_signals(self.proc_asm)
+
+    def _disconnect_process_signals(self, process):
+        """Helper to safely disconnect process signals"""
+        try:
+            process.readyReadStandardOutput.disconnect()
+            process.finished.disconnect()
+        except TypeError:
+            pass  # Signals already disconnected
 
     def _simulate(self):
         self._run_simulation(self.file_name)
@@ -578,35 +590,32 @@ class MainWindow(QWidget):
         if program not in ["Select program...", "No programs available", ""]:
             self._run_simulation(program)
 
-    def _run_simulation(self, program_name: str):
-        """Run simulation for given program name with debug options"""
-        bin_file = f"ROM Programs/build/{program_name}.bin"
-        if not os.path.exists(bin_file):
-            self._log(f"❌ Binary file not found: {bin_file}")
-            return
+    def _compile_testbench(self) -> bool:
+        """Compile the testbench with latest fixes"""
+        testbench_dir = Path("testbench")
+        testbench_file = testbench_dir / "tb_new.out"
+        
+        self._log("Compiling with latest control unit fixes...")
+        src = glob.glob("verilog/*.v") + ["testbench/computer_TB.v"]
+        compile_proc = QProcess()
+        compile_proc.start("iverilog", ["-o", str(testbench_file), "-I", "verilog"] + src)
+        compile_proc.waitForFinished()
+        
+        if compile_proc.exitCode() != 0:
+            self._log("Compilation failed!")
+            self._set_status("Compilation Failed ❌", "error")
+            return False
             
-        self.console.clear()
-        self._log("🚀 Starting enhanced simulation...")
-        self._set_status("Simulating...", "#f39c12")
-        
-        # Compile if needed
-        build_dir = Path("ROM Programs/build")
-        if not (build_dir / "tb.out").exists():
-            self._log("Compiling testbench...")
-            src = glob.glob("verilog/*.v") + ["testbench/computer_TB.v"]
-            compile_proc = QProcess()
-            compile_proc.start("iverilog", ["-g2012", "-o", str(build_dir / "tb.out"), "-s", "computer_TB"] + src)
-            compile_proc.waitForFinished()
-            if compile_proc.exitCode() != 0:
-                self._log("❌ Compilation failed!")
-                self._set_status("Compilation Failed ❌", "#e74c3c")
-                return
-        
-        # Build simulation arguments with debug options
+        self._log("Compilation successful!")
+        return True
+
+    def _build_simulation_args(self, program_name: str, testbench_file: Path) -> list:
+        """Build simulation arguments with debug options"""
+        bin_file = f"Programs/build/{program_name}.bin"
         cycle_value = self.cycle_spin.value()
         
         sim_args = [
-            "-n", "ROM Programs/build/tb.out",
+            str(testbench_file),
             f"+ROMFILE={bin_file}",
             f"+TESTNAME={program_name} Test",
             f"+CYCLES={cycle_value}"
@@ -614,34 +623,52 @@ class MainWindow(QWidget):
         
         # Add debug flags based on checkboxes
         debug_flags = [
-            (self.debug_pc,      "+DEBUG_PC",      "PC"),
-            (self.debug_ir,      "+DEBUG_IR",      "IR"),
-            (self.debug_regs,    "+DEBUG_REGS",    "Registers"),
-            (self.debug_mem,     "+DEBUG_MEM",     "Memory"),
-            (self.debug_io,      "+DEBUG_IO",      "I/O"),
-            (self.debug_state,   "+DEBUG_STATE",   "State"),
+            (self.debug_pc,              "+DEBUG_PC",      "PC"),
+            (self.debug_ir,              "+DEBUG_IR",      "IR"),
+            (self.debug_regs,            "+DEBUG_REGS",    "Registers"),
+            (self.debug_mem,             "+DEBUG_MEM",     "Memory"),
+            (self.debug_inner_workings,  "+DEBUG_INNER",   "Inner Workings"),
+            (self.debug_state,           "+DEBUG_STATE",   "State"),
         ]
 
         if self.debug_enable.isChecked():
-            sim_args.append("+DEBUG")                                      # master switch
+            sim_args.append("+DEBUG")
             enabled_flags = [flag for cb, flag, _ in debug_flags if cb.isChecked()]
             sim_args.extend(enabled_flags)
-            self._log(f"🔍 Debug flags added: {enabled_flags}")
+            self._log(f"Debug flags added: {enabled_flags}", "🔍")
 
-        if self.debug_verbose.isChecked():                                 # verbose is independent
+        if self.debug_verbose.isChecked():
             sim_args.append("+DEBUG_VERBOSE")
-            self._log("🔍 Verbose debugging enabled")
+            self._log("Verbose debugging enabled", "🔍")
 
         if self.debug_enable.isChecked():
             active = [label for cb, _, label in debug_flags if cb.isChecked()]
             if self.debug_verbose.isChecked():
                 active.append("Verbose")
-            self._log(f"🔍 Debug enabled: {', '.join(active)}")
+            self._log(f"Debug enabled: {', '.join(active)}")
             
-        # self._log(f"⏱️ Max cycles: {cycle_value}")                 
-        # self._log(f"🚀 Command: vvp {' '.join(sim_args)}")
+        return sim_args
+
+    def _run_simulation(self, program_name: str):
+        """Run simulation for given program name with debug options"""
+        bin_file = f"Programs/build/{program_name}.bin"
+        if not os.path.exists(bin_file):
+            self._log(f"Binary file not found: {bin_file}")
+            self._set_status("Binary File Not Found ❌", "error")
+            return
+            
+        self.console.clear()
+        self._log("Starting enhanced simulation...")
+        self._set_status("Simulating...", "working")
         
-        # Run simulation
+        # Compile testbench
+        if not self._compile_testbench():
+            return
+            
+        # Build and run simulation
+        testbench_file = Path("testbench") / "tb_new.out"
+        sim_args = self._build_simulation_args(program_name, testbench_file)
+        
         self.proc_sim.readyReadStandardOutput.connect(
             lambda: self._log(bytes(self.proc_sim.readAllStandardOutput()).decode(errors="ignore").strip())
         )
@@ -649,23 +676,25 @@ class MainWindow(QWidget):
         self.proc_sim.start("vvp", sim_args)
 
     def _on_sim_done(self):
+        """Handle simulation completion"""
         ok = self.proc_sim.exitCode() == 0
         self._set_status("Simulation Complete ✅" if ok else "Simulation Failed ❌", 
-                        "#27ae60" if ok else "#e74c3c")
+                        "success" if ok else "error")
         if ok:
-            self._log("🎉 Simulation completed!")
+            self._log("Simulation completed!")
             self.wave_btn.setEnabled(True)
         else:
-            self._log("❌ Simulation failed!")
-        self.proc_sim.readyReadStandardOutput.disconnect()
-        self.proc_sim.finished.disconnect()
+            self._log("Simulation failed!")
+        self._disconnect_process_signals(self.proc_sim)
 
     def _show_waves(self):
+        """Open GTKWave to show simulation waveforms"""
         if os.path.exists("waves.vcd"):
-            self._log("📊 Opening GTKWave...")
+            self._log("Opening GTKWave...")
             self.proc_wave.start("gtkwave", ["waves.vcd"])
         else:
-            self._log("❌ Wave file not found!")
+            self._log("Wave file not found!")
+            self._set_status("Wave File Not Found ❌", "error")
 
     def closeEvent(self, e):
         for p in [self.proc_asm, self.proc_sim, self.proc_wave]:

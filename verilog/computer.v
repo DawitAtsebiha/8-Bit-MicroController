@@ -1,6 +1,7 @@
 module computer(
     input clk,
     input reset,
+    input debug_inner,
     inout [7:0] io_data,   // 8-bit bidirectional data bus
     output [3:0] io_addr,   // 4-bit I/O port address
     output io_oe,           // Output enable (1 = computer driving bus)
@@ -14,6 +15,7 @@ module computer(
     cpu cpu1 (
         .clk(clk),
         .reset(reset),
+        .debug_inner(debug_inner),
         .address(address),
         .write(write),
         .to_memory(data_in),
