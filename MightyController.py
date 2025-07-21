@@ -558,7 +558,7 @@ class MainWindow(QWidget):
             lambda: self._log(bytes(self.proc_asm.readAllStandardOutput()).decode(errors="ignore").strip())
         )
         self.proc_asm.finished.connect(self._on_assemble_done)
-        self.proc_asm.start("python", ["software/assembler.py", "assemble", self.selected_file, "-o", out_bin])
+        self.proc_asm.start("python", ["src/software/assembler.py", "assemble", self.selected_file, "-o", out_bin])
 
     def _on_assemble_done(self):
         """Handle assembly completion"""
@@ -592,13 +592,15 @@ class MainWindow(QWidget):
 
     def _compile_testbench(self) -> bool:
         """Compile the testbench with latest fixes"""
-        testbench_dir = Path("testbench")
+        testbench_dir = Path("src/testbench")
         testbench_file = testbench_dir / "tb_new.out"
         
         self._log("Compiling with latest control unit fixes...")
-        src = glob.glob("verilog/*.v") + ["testbench/computer_TB.v"]
+        verilog_files = glob.glob("src/verilog/*.v")
+        systemverilog_files = glob.glob("src/verilog/*.sv") 
+        all_files = verilog_files + systemverilog_files + ["src/testbench/computer_TB.v"]
         compile_proc = QProcess()
-        compile_proc.start("iverilog", ["-o", str(testbench_file), "-I", "verilog"] + src)
+        compile_proc.start("iverilog", ["-g2012", "-o", str(testbench_file), "-I", "src/verilog"] + all_files)
         compile_proc.waitForFinished()
         
         if compile_proc.exitCode() != 0:
@@ -666,7 +668,7 @@ class MainWindow(QWidget):
             return
             
         # Build and run simulation
-        testbench_file = Path("testbench") / "tb_new.out"
+        testbench_file = Path("src/testbench") / "tb_new.out"
         sim_args = self._build_simulation_args(program_name, testbench_file)
         
         self.proc_sim.readyReadStandardOutput.connect(
