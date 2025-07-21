@@ -23,10 +23,12 @@ module computer_TB;
     wire [7:0] IR = dut.cpu1.data_path1.IR_Reg;
     
     // Access register file contents (A=register 0, B=register 1, etc.)
-    wire [7:0] Reg_A = dut.cpu1.reg_file.registers[0];  // Register A
-    wire [7:0] Reg_B = dut.cpu1.reg_file.registers[1];  // Register B
-    wire [7:0] Reg_C = dut.cpu1.reg_file.registers[2];  // Register C
-    wire [7:0] Reg_D = dut.cpu1.reg_file.registers[3];  // Register D
+    genvar i;
+    generate
+        for (i = 0; i < 16; i = i + 1) begin : reg_wires
+            wire [7:0] value = dut.cpu1.reg_file.registers[i];
+        end
+    endgenerate
 
     // Output monitoring signals for GTKWave
     reg [7:0] ROM_output;
@@ -204,8 +206,6 @@ module computer_TB;
         integer          n, start_cycles, ROM_count;
         reg              done;
     begin
-        $display("\n=== Starting Test: %0s ===", test_name);
-        $display("Loading ROM: %0s", romfile);
 
         load_rom(romfile);
 
@@ -226,9 +226,12 @@ module computer_TB;
             // Monitor register changes - show values when registers are written (only if inner workings enabled)
             if (dut.cpu1.reg_write_enable && debug_enable && debug_inner) begin
                 $display("  [Cycle %0d] REG_WRITE: R%0d = 0x%02h", 
-                         cycles, dut.cpu1.reg_write_addr, dut.cpu1.reg_write_data);
-                $display("                Current register values: A=0x%02h B=0x%02h C=0x%02h D=0x%02h", 
-                         Reg_A, Reg_B, Reg_C, Reg_D);
+                        cycles, dut.cpu1.reg_write_addr, dut.cpu1.reg_write_data);
+                $display("                Current register values: A=0x%02h B=0x%02h C=0x%02h D=0x%02h E=0x%02h F=0x%02h G=0x%02h H=0x%02h I=0x%02h J=0x%02h K=0x%02h L=0x%02h M=0x%02h N=0x%02h O=0x%02h P=0x%02h", 
+                        dut.cpu1.reg_file.registers[0], dut.cpu1.reg_file.registers[1], dut.cpu1.reg_file.registers[2], dut.cpu1.reg_file.registers[3],
+                        dut.cpu1.reg_file.registers[4], dut.cpu1.reg_file.registers[5], dut.cpu1.reg_file.registers[6], dut.cpu1.reg_file.registers[7],
+                        dut.cpu1.reg_file.registers[8], dut.cpu1.reg_file.registers[9], dut.cpu1.reg_file.registers[10], dut.cpu1.reg_file.registers[11],
+                        dut.cpu1.reg_file.registers[12], dut.cpu1.reg_file.registers[13], dut.cpu1.reg_file.registers[14], dut.cpu1.reg_file.registers[15]);
             end
             
             // Debug monitoring for PC, IR, Registers, State
@@ -284,9 +287,8 @@ module computer_TB;
                 $display("=== Test '%0s' COMPLETED successfully ===", test_name);
                 $display("Execution time: %0d cycles", cycles - start_cycles);
             end else begin
-                $display("=== Test '%0s' TIMEOUT after %0d cycles ===", test_name, max_cycles);
+                $display("=== '%0s' timed out after %0d cycles ===", test_name, max_cycles);
                 $display("Final state: PC=0x%02h, IR=0x%02h", PC, IR);
-                $display("Full register file contents:");
                 dut.cpu1.reg_file.debug_print_registers();
             end
             $display("Total cycles so far: %0d\n", cycles);
@@ -297,7 +299,7 @@ module computer_TB;
         initial begin
             $dumpfile("waves.vcd");
             $dumpvars(clk, reset, cycles);
-            $dumpvars(PC, IR, Reg_A, Reg_B, ROM_output);
+            $dumpvars(PC, IR, ROM_output);
             $dumpvars(io_addr, io_data, io_we);
             $dumpvars(ROM_valid, ROM_sequence_count);
 
@@ -312,10 +314,9 @@ module computer_TB;
     task run_dynamic_test;
         begin
             $display("\n========================================");
-            $display("ENHANCED DYNAMIC ROM TEST");
+            $display("Running: %0s", dynamic_test_name);
             $display("========================================");
             $display("ROM file: %0s", dynamic_rom_file);
-            $display("Test name: %0s", dynamic_test_name);
             $display("Max cycles: %0d", debug_cycles);
             $display("Clock period: 20ns (50MHz)");
             $display("Reset: Active high");
@@ -325,7 +326,7 @@ module computer_TB;
                 $display("Debug options active:");
                 if (debug_pc) $display("  - Program Counter (PC)");
                 if (debug_ir) $display("  - Instruction Register (IR)");
-                if (debug_regs) $display("  - A and B Registers");
+                if (debug_regs) $display("  - Full Registers");
                 if (debug_mem) $display("  - Memory accesses");
                 if (debug_io) $display("  - I/O operations");
                 if (debug_inner) $display("  - Inner workings (detailed CPU operations)");

@@ -519,10 +519,7 @@ class MainWindow(QWidget):
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
-    def _log(self, msg: str, emoji: str = ""):
-        """Log a message to the console with optional emoji prefix"""
-        if emoji:
-            msg = f"{emoji} {msg}"
+    def _log(self, msg: str):
         self.console.moveCursor(QTextCursor.MoveOperation.End)
         self.console.insertPlainText(msg + "\n")
         self.console.moveCursor(QTextCursor.MoveOperation.End)
@@ -558,7 +555,7 @@ class MainWindow(QWidget):
             lambda: self._log(bytes(self.proc_asm.readAllStandardOutput()).decode(errors="ignore").strip())
         )
         self.proc_asm.finished.connect(self._on_assemble_done)
-        self.proc_asm.start("python", ["software/assembler.py", "assemble", self.selected_file, "-o", out_bin])
+        self.proc_asm.start("python", ["src/software/assembler.py", "assemble", self.selected_file, "-o", out_bin])
 
     def _on_assemble_done(self):
         """Handle assembly completion"""
@@ -595,20 +592,39 @@ class MainWindow(QWidget):
         testbench_dir = Path("testbench")
         testbench_file = testbench_dir / "tb_new.out"
         
-        self._log("Compiling with latest control unit fixes...")
-        src = glob.glob("verilog/*.v") + ["testbench/computer_TB.v"]
+        # Ensure directory exists
+        testbench_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Include SystemVerilog files too
+        verilog_files = glob.glob("src/verilog/*.v")
+        systemverilog_files = glob.glob("src/verilog/*.sv")
+        all_files = verilog_files + systemverilog_files + ["src/testbench/computer_TB.v"]
+        
+        self._log(f"Found {len(verilog_files)} .v files, {len(systemverilog_files)} .sv files")
+        
         compile_proc = QProcess()
-        compile_proc.start("iverilog", ["-o", str(testbench_file), "-I", "verilog"] + src)
+        
+        # Add SystemVerilog support and error capture
+        compile_args = [
+            "-g2012",  # SystemVerilog 2012 support
+            "-o", str(testbench_file), 
+            "-I", "src/verilog"
+        ] + all_files
+                
+        compile_proc.start("iverilog", compile_args)
         compile_proc.waitForFinished()
         
         if compile_proc.exitCode() != 0:
+            
             self._log("Compilation failed!")
+            self._log(f"Exit code: {compile_proc.exitCode()}")
+                
             self._set_status("Compilation Failed ❌", "error")
             return False
             
         self._log("Compilation successful!")
         return True
-
+    
     def _build_simulation_args(self, program_name: str, testbench_file: Path) -> list:
         """Build simulation arguments with debug options"""
         bin_file = f"Programs/build/{program_name}.bin"
@@ -635,11 +651,11 @@ class MainWindow(QWidget):
             sim_args.append("+DEBUG")
             enabled_flags = [flag for cb, flag, _ in debug_flags if cb.isChecked()]
             sim_args.extend(enabled_flags)
-            self._log(f"Debug flags added: {enabled_flags}", "🔍")
+            self._log(f"Debug flags added: {enabled_flags}")
 
         if self.debug_verbose.isChecked():
             sim_args.append("+DEBUG_VERBOSE")
-            self._log("Verbose debugging enabled", "🔍")
+            self._log("Verbose debugging enabled")
 
         if self.debug_enable.isChecked():
             active = [label for cb, _, label in debug_flags if cb.isChecked()]
@@ -664,7 +680,8 @@ class MainWindow(QWidget):
         # Compile testbench
         if not self._compile_testbench():
             return
-            
+        
+        self.console.clear()
         # Build and run simulation
         testbench_file = Path("testbench") / "tb_new.out"
         sim_args = self._build_simulation_args(program_name, testbench_file)
