@@ -41,6 +41,7 @@ module cpu(
         .IR_Load(IR_Load),
         .IR(IR),
         .MAR_Load(MAR_Load),
+        .PC(PC),
         .PC_Load(PC_Load),
         .PC_Inc(PC_Inc),
         .reg_read_addr_A(reg_read_addr_A),
