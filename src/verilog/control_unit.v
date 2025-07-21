@@ -7,6 +7,7 @@ module control_unit (
     input [3:0] CCR_Result,
     output reg IR_Load,
     output reg MAR_Load,
+    input [7:0] PC,
     output reg PC_Load,
     output reg PC_Inc,
     output reg [3:0] reg_read_addr_A,
@@ -52,10 +53,8 @@ module control_unit (
                 LoadStore2: begin
                     if (LoadStoreOP) begin
                         reg_operand_1 <= from_memory;  // Register operand for load/store
-                        if (debug_inner) $display("[CTRL] Capturing register operand: from_memory=0x%02h at time %0t", from_memory, $time);
                     end else if (DataOP) begin
                         reg_operand_2 <= from_memory;  // Second operand for two-register data ops
-                        if (debug_inner) $display("[CTRL] LoadStore2: Capturing second operand from_memory=0x%02h at time %0t", from_memory, $time);
                     end
                 end
                 LoadStore4: begin
@@ -68,7 +67,6 @@ module control_unit (
                 end
                 Data2: begin
                     reg_operand_1 <= from_memory;  // First register for data ops
-                    if (debug_inner) $display("[CTRL] Data2: Capturing first operand from_memory=0x%02h at time %0t", from_memory, $time);
                 end
             endcase
         end
@@ -105,19 +103,16 @@ module control_unit (
                 Bus1_Sel = 2'b00;
                 Bus2_Sel = 3'b001;
                 MAR_Load = 1;
-                if (debug_inner) $display("[CTRL] Fetch0: Setting MAR to PC for instruction fetch at time %0t", $time);
                 next = Fetch1;
             end
 
             Fetch1: begin
                 // Don't increment PC yet - wait until instruction is loaded
-                if (debug_inner) $display("[CTRL] Fetch1: Waiting for memory stabilization at time %0t", $time);
                 next = Fetch2;
             end
 
             Fetch2: begin
                 // Wait one cycle for ROM synchronization
-                if (debug_inner) $display("[CTRL] Fetch2: Waiting for ROM sync, from_memory=0x%02h at time %0t", from_memory, $time);
                 next = Decode;
             end
 
@@ -125,12 +120,10 @@ module control_unit (
                 Bus2_Sel = 3'b010;  // Select from_memory
                 IR_Load = 1;        // Load instruction after ROM has stabilized
                 PC_Inc = 1;         // NOW increment PC to point to operands
-                if (debug_inner) $display("[CTRL] Decode (IR Load): Loading instruction from memory: 0x%02h, incrementing PC at time %0t", from_memory, $time);
                 next = Execute;     // Go to Execute state for actual decode logic
             end
 
             Execute: begin 
-                if (debug_inner) $display("[CTRL] Execute: IR=0x%02h, LoadStoreOP=%b, DataOP=%b, BranchOP=%b at time %0t", IR, LoadStoreOP, DataOP, BranchOP, $time);
                 if (LoadStoreOP)       
                     next = LoadStore0;
 
@@ -178,20 +171,17 @@ module control_unit (
                 Bus1_Sel = 2'b00;    // PC on Bus1 (should now point to register operand)
                 Bus2_Sel = 3'b001;   // Bus1 on Bus2
                 MAR_Load = 1;        // Load PC into MAR to fetch register operand
-                if (debug_inner) $display("[CTRL] LoadStore0: Setting MAR to PC to fetch register operand at time %0t", $time);
                 next = LoadStore1;
             end
 
             LoadStore1: begin
                 // Don't increment PC yet - need to capture register operand first
-                if (debug_inner) $display("[CTRL] LoadStore1: Waiting for register operand memory stabilization at time %0t", $time);
                 next = LoadStore2;
             end
 
             LoadStore2: begin
                 Bus2_Sel = 3'b010;
                 PC_Inc = 1;          // NOW increment PC after setting up register operand capture
-                if (debug_inner) $display("[CTRL] LoadStore2: IR=0x%02h, from_memory=0x%02h, incrementing PC at time %0t", IR, from_memory, $time);
 
                 if (DataOP && IR[7:4] == 4'hA) begin // All single-register operations (INC, DEC)
                     CCR_Load = 1; 
@@ -256,7 +246,6 @@ module control_unit (
 
             LoadStore4: begin
                 if (IR == 8'h80) begin  // LD immediate - now ROM output should be stable
-                    if (debug_inner) $display("[CTRL] LD immediate in LoadStore4: reg=%0d, from_memory=0x%02h at time %0t", reg_operand_1[3:0], from_memory, $time);
                     reg_write_addr = reg_operand_1[3:0];
                     reg_write_enable = 1;
                     Bus2_Sel = 3'b010;  // Use from_memory for immediate value
@@ -288,7 +277,6 @@ module control_unit (
 
             LoadStore5: begin
                 if (IR == 8'h80) begin  // LD immediate - complete the load operation
-                    if (debug_inner) $display("[CTRL] LD immediate in LoadStore5: reg=%0d, from_memory=0x%02h at time %0t", reg_operand_1[3:0], from_memory, $time);
                     reg_write_addr = reg_operand_1[3:0];
                     reg_write_enable = 1;
                     Bus2_Sel = 3'b010;  // Use from_memory for immediate value
@@ -300,7 +288,6 @@ module control_unit (
 
                     case(IR)
                         8'h90: begin  // ADD reg1, reg2
-                            if (debug_inner) $display("[CTRL] ADD: reg_operand_1=0x%02h, reg_operand_2=0x%02h at time %0t", reg_operand_1, reg_operand_2, $time);
                             reg_read_addr_A = reg_operand_1[3:0];
                             reg_read_addr_B = reg_operand_2[3:0];
                             reg_write_addr = reg_operand_1[3:0];
@@ -390,5 +377,25 @@ module control_unit (
 
             default: next = Fetch0;
         endcase
+
+        if (debug_inner) begin
+            case (state)
+                Fetch0: $display("[FETCH] PC=0x%02h", PC);
+                Decode: $display("[DECODE] IR=0x%02h", IR);
+                Execute: $display("[EXEC] IR=0x%02h → %s", IR, 
+                                LoadStoreOP ? "LOAD" : DataOP ? "ALU" : BranchOP ? "BRANCH" : "None");
+                LoadStore2: $display("[LD/ST] Captured operand=0x%02h", from_memory);
+                LoadStore4: $display("[LD] Writing 0x%02h to reg %0d", from_memory, reg_operand_1[3:0]);
+                LoadStore5: begin
+                    if (DataOP && IR[7:4] == 4'h9) // Two-register ALU
+                        $display("[ALU] %s: reg%0d %s reg%0d", 
+                                IR == 8'h90 ? "ADD" : IR == 8'h91 ? "SUB" : "ALU",
+                                reg_operand_1[3:0], 
+                                IR == 8'h90 ? "+" : IR == 8'h91 ? "-" : "op",
+                                reg_operand_2[3:0]);
+                end
+                Branch2: $display("[BRANCH] PC=%0d → %0d", PC, PC + from_memory);
+            endcase
+        end
     end
 endmodule
