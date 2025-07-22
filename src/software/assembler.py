@@ -30,15 +30,7 @@ class Opcode:
 def _op(code: int, mode: str, size: int = None) -> Opcode:
     # Size for operations determined by mode:
     if size is None:
-        size_map = {
-            "IMP": 2,   # Opcode + register (ex. INC A)
-            "IMM": 3,   # Opcode + register + immediate (ex: LD A, #$50)
-            "DIR": 3,   # Opcode + register + address (ex: LD A, $80)
-            "REG": 3,   # Opcode + reg1 + reg2 (ex: ADD A, B)
-            "REL": 2    # Opcode + offset (ex: BRA loop)
-        }
-        size = size_map.get(mode, 2)  # Default to 2 for ALU ops
-
+        size = 3  # Force all instructions to 3 bytes
     return Opcode(code, size, mode)
 
 REGISTERS = {
@@ -154,6 +146,7 @@ def assemble(lines: List[str]) -> bytes:
         if mode == "IMP":            # Single register (INC A, DEC B)
             reg_num = op_val
             rom.append(reg_num)
+            rom.append(0x00) 
 
         elif mode == "REG":          # Two registers (ADD A, B)
             reg1_num, reg2_num = op_val
@@ -170,11 +163,11 @@ def assemble(lines: List[str]) -> bytes:
         elif mode == "REL":        # Relative branch (BRA loop)
             if op_val == "*":
                 off = (-1 & 0xFF)
-
             else:
                 target_addr = labels[op_val]
-                current_pc = pc + 1  # PC after branch instruction (pc is already incremented)
-                offset = target_addr - current_pc
+                # PC after fetching the complete 3-byte branch instruction
+                current_pc_after_instruction = pc + 2  # pc already incremented by 1, instruction is 3 bytes
+                offset = target_addr - current_pc_after_instruction
                 
                 # Check if offset is within valid range (-128 to +127)
                 if offset < -128 or offset > 127:
@@ -183,6 +176,7 @@ def assemble(lines: List[str]) -> bytes:
                 off = offset & 0xFF
             
             rom.append(off)
+            rom.append(0x00)
             
         pc = len(rom)
     return bytes(rom)
