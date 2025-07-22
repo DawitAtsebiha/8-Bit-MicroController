@@ -621,8 +621,6 @@ class MainWindow(QWidget):
             self.last_build = out_path.resolve()          # store for run step
 
         return ok
-
-
     
     def _build_simulation_args(self, program_name: str, testbench_file: Path) -> list:
         """Build simulation arguments with debug options"""
