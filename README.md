@@ -9,7 +9,6 @@
 ## Table of Contents
 - [Overview](#overview)
 - [Quick Start](#quickstart)
-- [Project Structure](#projectstructure)
 - [Module Breakdown](#module-breakdown)
 - [Architecture](#architecture)
   - [CPU Core](#cpu-core)
@@ -70,30 +69,6 @@ python software/assembler.py assemble Programs/asm/test.asm -o Programs/build/te
 iverilog -g2012 -s computer_TB -o build/tb.out verilog/*.sv testbench/computer_TB.sv
 vvp -n build/tb.out +ROMFILE=build/test.bin +DEBUG +CYCLES=500
 gtkwave waves.vcd
-```
-
-## Project Structure
-```text
-8‑Bit‑MightyController/
-├── MightyController GUI.py      # GUI development front-end
-├── software/
-│   └── assembler.py             # Two‑pass Python assembler (see docs below)
-├── verilog/                     # RTL
-│   ├── computer.v               # Top‑level wrapper
-│   ├── cpu.v                    # CPU core
-│   ├── data_path.v              # Register file, buses, ALU glue
-│   ├── control_unit.v           # Micro‑coded FSM
-│   ├── ALU.v                    # 8‑bit arithmetic logic unit
-|   ├── registers.v              # 
-|   ├── 
-|   ├──  
-│   └── Memory.sv                # Unified ROM/RAM/I‑O
-├── testbench/
-│   └── computer_TB.sv           # Feature‑rich testbench
-├── ROM Programs/
-│   ├── asm/                     # Source
-│   └── build/                   # Compiled binaries
-└── Documentation/               # PDF companion, state diagrams, schematics
 ```
 
 ## Module Breakdown
