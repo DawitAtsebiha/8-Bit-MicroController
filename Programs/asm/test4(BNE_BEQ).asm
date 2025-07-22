@@ -1,5 +1,6 @@
-// Test 4: Branch Operations - SIMPLIFIED VERSION
-// Tests BEQ and BNE instructions with minimal program
+// Test 4: Branch Operations - NOTE: BRA, BEQ, and BNE are currently a work in progress, individually BEQ and BNE
+//                              should work, however when combined it does not properly execute branches
+//                              BRA also currently iterates over the whole program and not just the label
 
 // Simple decrement loop test  
 LD F, #$03        // Load F with 3 (smaller number for easier debugging)
