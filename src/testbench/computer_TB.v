@@ -20,7 +20,7 @@ module computer_TB;
     );
 
     wire [7:0] PC = dut.cpu1.data_path1.PC;
-    wire [7:0] IR = dut.cpu1.data_path1.IR_Reg;
+    wire [7:0] IR = dut.cpu1.data_path1.IR_reg;
     
     // Access register file contents (A=register 0, B=register 1, etc.)
     wire [7:0] Reg_A = dut.cpu1.reg_file.registers[0];  // Register A
@@ -46,24 +46,12 @@ module computer_TB;
         input [5:0] state_val;
         begin
             case(state_val)
-                0:  state_name = "Fetch0";
-                1:  state_name = "Fetch1";
-                2:  state_name = "Fetch2";
-                10: state_name = "Decode";
-                11: state_name = "Execute";
-                20: state_name = "LoadStore0";
-                21: state_name = "LoadStore1";
-                22: state_name = "LoadStore2";
-                23: state_name = "LoadStore3";
-                24: state_name = "LoadStore4";
-                25: state_name = "LoadStore5";
-                30: state_name = "Data0";
-                31: state_name = "Data1";
-                32: state_name = "Data2";
-                33: state_name = "Data3";
-                40: state_name = "Branch0";
-                41: state_name = "Branch1";
-                42: state_name = "Branch2";
+                0:  state_name = "Fetch";
+                1: state_name = "Decode";
+                2: state_name = "Execute";
+                3: state_name = "LoadStore";
+                4: state_name = "Data";
+                5: state_name = "Branch";
                 default: state_name = "UNKNOWN";
             endcase
         end
