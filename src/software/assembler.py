@@ -99,7 +99,7 @@ def _parse_instruction(inst: str) -> Tuple[str, List[str]]:
 # 3.  Two-pass assembler
 def assemble(lines: List[str]) -> bytes:
     # Convert source lines to a ROM image (byte string).
-    src = [ln.split(';', 1)[0].rstrip() for ln in lines]  # strip comments
+    src = [ln.split('//', 1)[0].rstrip() for ln in lines]  # strip comments
 
     # pass-1: collect labels / constants, compute PC
     labels: Dict[str, int] = {}
@@ -165,9 +165,9 @@ def assemble(lines: List[str]) -> bytes:
                 off = (-1 & 0xFF)
             else:
                 target_addr = labels[op_val]
-                # PC after fetching the complete 3-byte branch instruction
-                current_pc_after_instruction = pc + 2  # pc already incremented by 1, instruction is 3 bytes
-                offset = target_addr - current_pc_after_instruction
+                # PC during branch calculation will be the address after the full 3-byte instruction
+                current_pc_during_calculation = pc + 2  # pc+1 after opcode, +1 more for full instruction 
+                offset = target_addr - current_pc_during_calculation
                 
                 # Check if offset is within valid range (-128 to +127)
                 if offset < -128 or offset > 127:
