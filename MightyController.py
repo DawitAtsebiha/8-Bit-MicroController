@@ -519,10 +519,7 @@ class MainWindow(QWidget):
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
-    def _log(self, msg: str, emoji: str = ""):
-        """Log a message to the console with optional emoji prefix"""
-        if emoji:
-            msg = f"{emoji} {msg}"
+    def _log(self, msg: str):
         self.console.moveCursor(QTextCursor.MoveOperation.End)
         self.console.insertPlainText(msg + "\n")
         self.console.moveCursor(QTextCursor.MoveOperation.End)
@@ -591,26 +588,42 @@ class MainWindow(QWidget):
             self._run_simulation(program)
 
     def _compile_testbench(self) -> bool:
-        """Compile the testbench with latest fixes"""
-        testbench_dir = Path("src/testbench")
-        testbench_file = testbench_dir / "tb_new.out"
-        
-        self._log("Compiling with latest control unit fixes...")
-        verilog_files = glob.glob("src/verilog/*.v")
-        systemverilog_files = glob.glob("src/verilog/*.sv") 
-        all_files = verilog_files + systemverilog_files + ["src/testbench/computer_TB.v"]
-        compile_proc = QProcess()
-        compile_proc.start("iverilog", ["-g2012", "-o", str(testbench_file), "-I", "src/verilog"] + all_files)
-        compile_proc.waitForFinished()
-        
-        if compile_proc.exitCode() != 0:
-            self._log("Compilation failed!")
-            self._set_status("Compilation Failed ❌", "error")
-            return False
-            
-        self._log("Compilation successful!")
-        return True
+        tb_dir = Path("src/testbench")
+        tb_dir.mkdir(parents=True, exist_ok=True)     
+        out_path = tb_dir / "tb_new.out"
 
+        verilog_files       = glob.glob("src/verilog/*.v")
+        systemverilog_files = glob.glob("src/verilog/*.sv")
+        all_sources = verilog_files + systemverilog_files + ["src/testbench/computer_TB.v"]
+
+        cmd = ["iverilog", "-g2012", "-o", str(out_path), "-I", "src/verilog"] + all_sources
+
+        self._log("Compiling …")
+
+        proc = QProcess(self)
+        proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        proc.start(cmd[0], cmd[1:])
+
+        while proc.waitForFinished(30):
+            chunk = proc.readAllStandardOutput()
+            if chunk:
+                self._log(bytes(chunk).decode().rstrip())
+
+        leftover = proc.readAllStandardOutput()
+        if leftover:
+            self._log(bytes(leftover).decode().rstrip())
+
+        ok = proc.exitStatus() == QProcess.ExitStatus.NormalExit and proc.exitCode() == 0
+        self._set_status("Compilation OK ✅" if ok else "Compilation Failed ❌",
+                        "ok" if ok else "error")
+
+        if ok:
+            self.last_build = out_path.resolve()          # store for run step
+
+        return ok
+
+
+    
     def _build_simulation_args(self, program_name: str, testbench_file: Path) -> list:
         """Build simulation arguments with debug options"""
         bin_file = f"Programs/build/{program_name}.bin"
@@ -637,11 +650,11 @@ class MainWindow(QWidget):
             sim_args.append("+DEBUG")
             enabled_flags = [flag for cb, flag, _ in debug_flags if cb.isChecked()]
             sim_args.extend(enabled_flags)
-            self._log(f"Debug flags added: {enabled_flags}", "🔍")
+            self._log(f"Debug flags added: {enabled_flags}")
 
         if self.debug_verbose.isChecked():
             sim_args.append("+DEBUG_VERBOSE")
-            self._log("Verbose debugging enabled", "🔍")
+            self._log("Verbose debugging enabled")
 
         if self.debug_enable.isChecked():
             active = [label for cb, _, label in debug_flags if cb.isChecked()]
@@ -666,7 +679,8 @@ class MainWindow(QWidget):
         # Compile testbench
         if not self._compile_testbench():
             return
-            
+        
+        self.console.clear()
         # Build and run simulation
         testbench_file = Path("src/testbench") / "tb_new.out"
         sim_args = self._build_simulation_args(program_name, testbench_file)
