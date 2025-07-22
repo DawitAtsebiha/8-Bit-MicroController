@@ -1,69 +1,43 @@
-# 8‑But MightyController
+# 8-But MightyController
 
-### A teaching‑oriented 8‑bit CPU with a modern workflow
-
-> GUI • Custom two‑pass assembler • Verilog RTL • Icarus/GTKWave simulation
+> A learning-oriented 8-bit CPU with modern development workflow  
+> GUI • Custom two-pass assembler • Verilog RTL • Icarus/GTKWave simulation
 
 ---
 
-## Table of Contents
-- [Overview](#overview)
-- [Quick Start](#quickstart)
-- [Module Breakdown](#module-breakdown)
-- [Architecture](#architecture)
-  - [CPU Core](#cpu-core)
-  - [Memory Sub‑System](#memory-subsystem)
-  - [I/O Map](#iomap)
-- [Instruction Set Architecture (ISA)](#instructionset)
-  - [Addressing Modes](#addressingmodes)
-  - [Opcode Reference](#opcodereference)
-- [Development Workflow](#development-workflow)
-  - [Graphical UI](#using-the-gui)
-  - [Command Line](#commandline)
-- [Simulation & Debugging](#simulationdebugging)
-- [Sample Programs](#sampleprograms)
-- [Prerequisites & Installation](#prerequisitesinstallation)
-- [Roadmap](#roadmap-want-to-add)
-
 ## Overview
 
-**8‑But MightyController** is an 8-Bit CPU designed for hardware/firmware co‑design:
+**8-But MightyController** is an 8-bit CPU that I started working on to learn more about MicroControllers and low-level assembly and Digital Logics! If you have any feature/performance improvement suggestions I would be more than happen to implement them, also make sure to check the wiki where I document major changes!
 
-* A parameterised register file (16 × 8‑bit) that supports single‑register and register‑to‑register ALU operations
-* A robust control unit that sequences a 6‑stage finite‑state‑machine  
-* A two-pass assembler that understands labels, `EQU` constants, relative branching, immediate/direct/register addressing to convert assembly code written in the 8-But Mighty's custom ISA
-* An easy to use GUI that covers the workflow of assembly ➜ compile ➜ simulate ➜ waveform inspection in one window  
-* A thorough testbench with CLI flags (`+ROMFILE=`, `+CYCLES=`, `+DEBUG_PC`, …) that allows for in-depth debugging
+### Key Features
+* **16 general-purpose registers** (A-P) with comprehensive ALU operations
+* **Two-pass assembler** with label resolution and branch offset calculation
+* **Integrated GUI workflow** covering assembly → compile → simulate → debug
+* **Comprehensive test suite** with detailed debugging capabilities
+* **GTKWave integration** for signal inspection and timing analysis
 
-This repo contains a couple of demo programs that can be assembled and debugged from the GUI right away, just follow the quick‑start below. If you’d like to create and debug your own programs, make sure to consult the [ISA documentation!](#instruction-set)
+---
 
-## Quick Start
+## Quick Start
 
 ```bash
 # 1. Clone & enter
-git clone https://github.com/DawitAtsebiha/8‑But‑MightyController.git
-cd 8‑But‑MightyController
+git clone https://github.com/DawitAtsebiha/8-But-MightyController.git
+cd 8-But-MightyController
 
-# 2. Install dependencies (Windows users: see Chocolatey notes below)
+# 2. Install dependencies
 pip install -r requirements.txt   # PyQt6 click
 
 # 3. Launch the assembler/simulator
 python "MightyController.py"
 ```
 
+**Using the GUI:**
 1. **Load** an `.asm` program from `Programs/asm/`  
-2. Click **Assemble** ➜ **Compile & Simulate**  
+2. Click **Assemble** → **Compile & Simulate**  
 3. GTKWave opens with the waveform trace; inspect `PC`, `IR`, `io_data`, etc.
 
-If you would like to run the assembly/simulations directly in your console and/or adjust the iverilog settings, use the following format:
-```bash
-python software/assembler.py assemble [location of .asm file] -o Programs/build/[name of program].bin
-iverilog -g2012 -s computer_TB -o build/tb.out verilog/*.sv testbench/computer_TB.sv
-vvp -n build/tb.out +ROMFILE=build/[name of program].bin +DEBUG +CYCLES=500
-gtkwave waves.vcd
-```
-
-An example of the above would be: 
+**Command Line Alternative:**
 ```bash
 python software/assembler.py assemble Programs/asm/test.asm -o Programs/build/test.bin
 iverilog -g2012 -s computer_TB -o build/tb.out verilog/*.sv testbench/computer_TB.sv
@@ -71,124 +45,139 @@ vvp -n build/tb.out +ROMFILE=build/test.bin +DEBUG +CYCLES=500
 gtkwave waves.vcd
 ```
 
-## Module Breakdown
-
-| File            | Responsibilities                                                                                                                                                                   | Works With                       |
-|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------|
-| **computer.sv** | System top‑level. Instantiates `cpu`, `Memory`, and routes the tri‑state `io_data` bus. Provides the clean interface seen by the testbench or (eventually) an FPGA top module.      | `cpu.sv`, `Memory.sv`            |
-| **cpu.sv**      | Glue wrapper combining `data_path` and `control_unit`; exposes simple handshake signals to the outside world (`mem_address`, `mem_data`, `mem_we`).                                 | `data_path.sv`, `control_unit.sv`|
-| **data_path.sv**| Implements the register file, ALU, program counter, internal multiplexers, and status‑flag logic. All arithmetic signals live here.                                                 | `ALU.sv`, `registers.sv`         |
-| **control_unit.sv** | Six‑state FSM that generates control signals: selects bus sources, issues register writes, orchestrates memory cycles and branching. Translates `IR` + flags into next state. | `data_path.sv`                   |
-| **registers.sv**| True dual‑port 16 × 8‑bit register file. Read addresses come from the control unit; write‑back addressed via datapath.                                                              | `data_path.sv`                   |
-| **ALU.sv**      | Pure‑combinational arithmetic / logic unit supporting ADD, SUB, AND, OR, XOR plus INC/DEC shorthand. Outputs result and status flags (Z, N, C).                                     | `data_path.sv`                   |
-| **Memory.sv**   | Unified memory module mapping 0x00–0x7F to ROM, 0x80–0xDF to RAM, 0xF0–0xFF to I/O. Reads are single‑cycle; writes are ignored for the ROM region.                                   | `computer.sv`, external I/O      |
-
-**How the pieces fit together**
-
-1. On each clock edge **control_unit** evaluates the current state plus `IR` and issues control signals (register selects, ALU op, write‑enables).  
-2. **data_path** moves data between the register file, ALU, and memory interface based on those signals. ALU results can feed back into registers or update the PC.  
-3. For memory requests, **Memory** decides whether the access hits ROM, RAM, or the I/O window. ROM reads return the byte next cycle; I/O writes drive `io_data` so peripherals/testbench can observe them.  
-4. The top‑level **computer** module simply wires CPU ↔ Memory and exports the tri‑state I/O bus so the testbench (or real hardware) can latch LED patterns, etc.
-
-## State Machine & Encoding
-
-The **control_unit.sv** drives the CPU through **17 one‑hot states**. A register with 17 flip‑flops holds the active state; exactly one bit is `1` at any time, keeping next‑state logic simple and glitch‑free on FPGAs.
-
-### State Overview
-| ID | Mnemonic    | Purpose                             |
-|----|-------------|-------------------------------------|
-| 0  | Fetch0      | Issue program‑counter address to ROM |
-| 1  | Fetch1      | Latch opcode into `IR`               |
-| 2  | Fetch2      | Bypass stalls / align buses          |
-| 3  | Decode      | Determine addressing mode & dispatch |
-| 4  | LoadStore0  | Addr calculation for LD/ST           |
-| 5  | LoadStore2  | Read / write cycle start             |
-| 6  | LoadStore3  | Wait for memory ready                |
-| 7  | LoadStore4  | Write‑back to register               |
-| 8  | LoadStore5  | Finalise bus release                 |
-| 9  | Data0       | First ALU phase (source fetch)       |
-| 10 | Data1       | Execute ALU                          |
-| 11 | Data2       | Write‑back result                    |
-| 12 | Data3       | Flag update                          |
-| 13 | Branch0     | Calculate relative offset            |
-| 14 | Branch1     | Update PC if taken                   |
-| 15 | Branch2     | Flush pipeline & resume fetch        |
-
-> A visual representation of the transitions can be found below. Arrows correspond to *next‑state* paths evaluated inside `control_unit.sv`.
-![8-But MightyController StateDiagram](https://github.com/user-attachments/assets/488a753f-e519-4447-a7a3-94b77992899e)
-
-### One‑Hot Encoding Matrix
-Each row shows the 17‑bit state register where `1` marks the active state. For example, row `Fetch0` asserts bit‑16 while all others are 0.
-<img width="1288" height="577" alt="8-But MightyController StateDiagramEncoding" src="https://github.com/user-attachments/assets/7dd33d20-ff8b-4c7d-93d3-a294651ec3fe" />
-
-This explicit encoding eliminates ripple decoders and allows single‑cycle, combinational next‑state logic, which is important for meeting timing once the design is ported to an FPGA.
+---
 
 ## Architecture
 
-### CPU Core
-* **Registers** — 16 general‑purpose 8‑bit regs (`A..P`) exposed to the ISA.  
-* **ALU** — supports ADD, SUB, AND, OR, XOR, INC, DEC with flag update.  
-* **Control Unit** — 6‑state FSM (`Fetch0/1/2`, `Decode`, `Data*`, `Branch*`, …) drives bus multiplexers & write‑enables.
+### CPU Core Components
+* **Registers** — 16 general-purpose 8-bit registers (`A..P`) exposed to the ISA
+* **ALU** — Supports ADD, SUB, AND, OR, XOR, INC, DEC with flag updates and overflow detection
+* **Control Unit** — Enhanced 6-state FSM with improved branch handling
+* **Branch Logic** — PC-relative branching with ±127 byte range using signed 8-bit offsets
 
-### Memory Sub‑System
-* 128‑byte _on‑chip_ ROM, 96‑byte RAM, 16‑byte memory‑mapped I/O.  
-* Single‑cycle access thanks to unified `Memory.sv`.  
-* `computer_TB` provides a helper `load_rom()` task to patch ROM contents at sim‑time.
+### Memory System
+| Range | Size | Purpose |
+|-------|------|---------|
+| `$00-$7F` | 128 bytes | On-chip ROM |
+| `$80-$DF` | 96 bytes | RAM |
+| `$F0-$FF` | 16 bytes | Memory-mapped I/O |
 
-### I/O Map
-| Range | Purpose            |
-|-------|--------------------|
-| `$F0` | LED out / GPIO     |
-| `$F1` | (reserved)         |
-| …     | Future expansion   |
+### I/O Mapping
+| Address | Purpose |
+|---------|---------|
+| `$F0` | LED output / GPIO |
+| `$F1-$FF` | Reserved for expansion |
 
-## Instruction Set
+### State Machine
+The CPU uses a **6-stage finite state machine** for instruction execution:
 
-### Addressing Modes
-| Mode | Syntax | Bytes | Notes |
-|------|--------|-------|-------|
-| **IMP** | `INC A` | 2 | opcode + reg |
-| **IMM** | `LD A, #$7F` | 3 | reg + literal |
-| **DIR** | `ST B, $80` | 3 | reg + zero‑page addr |
-| **REG** | `ADD A, B` | 3 | reg + reg |
-| **REL** | `BRA loop` | 2 | PC‑relative ±128 |
+| Stage | Purpose |
+|-------|---------|
+| **Fetch** | Multi-cycle instruction fetch (3 bytes) |
+| **Decode** | Determine instruction type & addressing mode |
+| **Execute** | Setup ALU operations & condition evaluation |
+| **LoadStore** | Memory operations (LD/ST instructions) |
+| **Data** | ALU execution & register write-back |
+| **Branch** | PC-relative branch calculation & execution |
 
-### Opcode Reference
-*(Full table in PDF companion)*
+---
 
-| Mnemonic | Modes | Summary |
-|----------|-------|---------|
-| `LD` | IMM, DIR | Load reg |
-| `ST` | DIR | Store reg |
-| `ADD/SUB/AND/OR/XOR` | REG | Two‑operand ALU |
-| `INC/DEC` | IMP | Single‑reg ALU |
-| `BRA/BNE/BEQ` | REL | Relative branch |
+## Instruction Set Architecture
 
-## Development Workflow
+### Addressing Modes
+All instructions use consistent 3-byte encoding for simplified control logic:
 
-### Using the GUI
-1. Write or import `.asm` source.  
-2. **Assemble** — generates a binary in `ROM Programs/build/`.  
-3. **Compile & Simulate** — invokes Icarus & opens GTKWave.  
-4. Toggle live debug check‑boxes (`PC`, `IR`, registers, state machine) to step through execution.
+| Mode | Syntax | Format | Description |
+|------|--------|--------|-------------|
+| **IMP** | `INC A` | opcode + reg + padding | Implied operand |
+| **IMM** | `LD A, #$7F` | opcode + reg + literal | Immediate value |
+| **DIR** | `ST B, $80` | opcode + reg + address | Direct memory |
+| **REG** | `ADD A, B` | opcode + reg1 + reg2 | Register-to-register |
+| **REL** | `BRA loop` | opcode + offset + padding | PC-relative branch |
 
-### Command Line
-See [Quick Start](#quick-start) for the one‑liner sequence, or pass `+` arguments to the testbench, for example:
+### Complete Instruction Reference
 
-```bash
-vvp -n build/tb.out     +ROMFILE=build/fibo.bin     +TESTNAME=Fibonacci     +CYCLES=2000     +DEBUG_PC +DEBUG_IR +DEBUG_REGS
+| Mnemonic | Modes | Description | Opcodes |
+|----------|-------|-------------|---------|
+| **Data Movement** | | | |
+| `LD` | IMM, DIR | Load register from immediate or memory | 0x80, 0x81 |
+| `ST` (not currently functional) | DIR | Store register to memory | 0x82 |
+| **Arithmetic & Logic** | | | |
+| `ADD` | REG | Add registers: A = A + B | 0x90 |
+| `SUB` | REG | Subtract registers: A = A - B | 0x91 |
+| `AND` | REG | Bitwise AND: A = A & B | 0x92 |
+| `OR` | REG | Bitwise OR: A = A \| B | 0x93 |
+| `XOR` | REG | Bitwise XOR: A = A ^ B | 0x94 |
+| `INC` | IMP | Increment register: A = A + 1 | 0xA0 |
+| `DEC` | IMP | Decrement register: A = A - 1 | 0xA1 |
+| **Control Flow** | | | |
+| `BRA` | REL | Unconditional branch | 0x20 |
+| `BNE` | REL | Branch if not equal (Z=0) | 0x23 |
+| `BEQ` | REL | Branch if equal (Z=1) | 0x24 |
+
+**Branch Instructions:**
+- Use PC-relative addressing with ±127 byte range
+- Branch offset calculated as: `target_address - (PC_after_instruction)`
+- BNE/BEQ test the Zero flag from the last ALU operation
+
+---
+
+## Sample Programs
+
+### Basic Load/Store Testing
+```assembly
+// test1(LD).asm - Load Instruction Testing
+LD A, #$42          // Load immediate
+LD B, #$7F          // Load immediate  
+ST A, $80           // Store to memory
+LD C, $80           // Load from memory
 ```
 
-## Simulation & Debugging
+### Arithmetic Operations
+```assembly
+// test2(ALU).asm - ALU Testing  
+LD A, #$0F
+LD B, #$03
+ADD A, B            // A = A + B
+SUB A, B            // A = A - B  
+AND A, B            // A = A & B
+OR A, B             // A = A | B
+XOR A, B            // A = A ^ B
+```
 
-The testbench exposes internal signals as VCD for post‑hoc inspection **and** prints human‑readable traces during execution.
+### Branch Control Flow
+```assembly
+// test4(BNE_BEQ).asm - Branch Testing
+LD F, #$03          // Load counter
 
-Key GTKWave signals:
-* `PC`, `IR` — instruction flow  
-* `Reg_A…Reg_D` — working registers  
-* `io_data`, `io_we` — external interface  
-* `dut.cpu1.control_unit1.state` — current FSM state
+LOOP:
+    DEC F           // Decrement counter
+    BNE LOOP        // Branch back if F ≠ 0
 
+// Test equality branching  
+LD G, #$42
+LD H, #$42
+SUB G, H            // G = 0, sets Zero flag
+BEQ SUCCESS         // Branch if equal
+
+LD B, #$FF          // Error path
+SUCCESS:
+LD C, #$AA          // Success path
+```
+
+---
+
+## Testing & Debugging
+
+### Test Suite
+The repository includes comprehensive test programs:
+
+* **test1(LD).asm** - Load instruction testing with immediate and direct addressing
+* **test2(ALU).asm** - Complete ALU operation validation  
+* **test3(INC_DEC).asm** - Increment/decrement functionality
+* **test4(BNE_BEQ).asm** - Branch instruction testing with loop control
+
+### Debug Features
 Enable targeted logging with plusargs:
 
 | Flag | Effect |
@@ -196,40 +185,116 @@ Enable targeted logging with plusargs:
 | `+DEBUG_PC` | Print PC each cycle |
 | `+DEBUG_STATE` | Decode FSM to mnemonic |
 | `+DEBUG_MEM` | Show RAM writes |
+| `+DEBUG_REG` | Show register file contents |
+| `+DEBUG_INNER` | Show detailed CPU operations |
+| `+CYCLES=N` | Set maximum simulation cycles |
 
-## Sample Programs
+### GTKWave Signals
+Key signals for inspection:
+* `PC`, `IR` — instruction flow and branch targets
+* `Reg_A…Reg_P` — all 16 working registers  
+* `io_data`, `io_we` — external interface  
+* `dut.cpu1.control_unit1.state` — current FSM state
+* `dut.cpu1.data_path1.alu_result` — ALU computation results
 
-### LED Blink
-Toggles bit‑0 of `$F0` at ~1 kHz.
+---
 
-```assembly
-start:  LD A, #$01
-loop:   ST A, $F0      ; LED on
-        LD A, #$00
-        ST A, $F0      ; LED off
-        BRA loop
-```
+## Module Architecture
 
-## Prerequisites & Installation
+| File | Responsibilities | Dependencies |
+|------|-----------------|--------------|
+| **computer.sv** | System top-level, instantiates CPU and memory, routes I/O bus | `cpu.sv`, `Memory.sv` |
+| **cpu.sv** | Combines data path and control unit with external handshake | `data_path.sv`, `control_unit.sv` |
+| **data_path.sv** | Register file, ALU, PC, multiplexers, flag logic | `ALU.sv`, `registers.sv` |
+| **control_unit.sv** | 6-state FSM, control signal generation, branch orchestration | `data_path.sv` |
+| **registers.sv** | Dual-port 16×8-bit register file | `data_path.sv` |
+| **ALU.sv** | Combinational arithmetic/logic unit with status flags | `data_path.sv` |
+| **Memory.sv** | Unified memory with ROM/RAM/I/O mapping | `computer.sv` |
+
+---
+
+## Development Status
+
+### Recent Improvements
+* **Enhanced branch instructions** — BRA, BNE, BEQ with proper PC-relative addressing
+* **Improved assembler** — Fixed branch offset calculation for correct relative addressing  
+* **Comprehensive test suite** — Complete instruction testing including branch operations
+* **Enhanced debugging** — Additional debug flags and detailed state inspection
+
+### Current Issues
+* Branch instructions may produce incorrect PC jumps due to ALU input timing
+* Complex branch scenarios require additional validation
+* Some edge cases in branch offset calculation may need refinement
+
+### Testing Recommendations
+Start with simple test programs (test1-test3) to verify basic CPU functionality, then proceed to branch testing (test4) for advanced validation.
+
+---
+
+## Prerequisites & Installation
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Python | 3.7+ | assembler, GUI |
-| PyQt6 | latest | GUI |
-| Icarus Verilog | 11+ | simulation |
-| GTKWave | 3.3+ | waveform viewer |
+| Python | 3.7+ | Assembler, GUI |
+| PyQt6 | latest | GUI framework |
+| Icarus Verilog | 11+ | HDL simulation |
+| GTKWave | 3.3+ | Waveform viewer |
 
-On Windows:
-
+### Windows Installation
 ```powershell
 choco install python iverilog gtkwave
 pip install PyQt6 click
 ```
 
-## Roadmap (Want to add)
-* **Add more operations, and conditional branches** (`MUL`, `JMP`, `BPL`, etc.)  
-* **Write synthesis constraints** for an entry‑level FPGA board (IceBreaker)  
+### Linux/macOS Installation
+```bash
+# Ubuntu/Debian
+sudo apt install python3 iverilog gtkwave
+pip3 install PyQt6 click
 
-Contributions & bug reports welcome!
+# macOS (Homebrew)
+brew install python icarus-verilog gtkwave
+pip3 install PyQt6 click
+```
+
+---
+
+## Roadmap
+
+### Completed
+* Simplified control unit states from 17 to 6 using optimizations in the assembler
+* Enhanced branch instructions with PC-relative addressing
+* Two-pass assembler with label resolution
+* Comprehensive test suite and debugging tools
+* Integrated GUI workflow
+
+### In Progress 
+* Branch instruction hardware optimization
+* ALU input routing fixes for reliable branch execution
+
+### Future Work
+* **Hardware Expansion**
+  - Dynamic ROM loading for FPGA deployment
+  - Implement pipeline processing 
+  - Additional conditional branches (BCC, BPL, BMI, BVS)
+  - Interrupt system with vector table
+* **Development Tools**
+  - Unit tests for assembler components
+  - Synthesis constraints for FPGA boards
+  - Memory expansion support
+* **Documentation**
+  - Video tutorials and educational materials
+  - Advanced programming examples
+  - Hardware interfacing guides
+
+---
+
+## Contributing
+
+Contributions and bug reports are welcome! Please feel free to:
+- Report issues or bugs
+- Suggest new features or improvements  
+- Submit pull requests with enhancements
+- Share educational use cases and examples
 
 ---

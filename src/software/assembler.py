@@ -30,15 +30,7 @@ class Opcode:
 def _op(code: int, mode: str, size: int = None) -> Opcode:
     # Size for operations determined by mode:
     if size is None:
-        size_map = {
-            "IMP": 2,   # Opcode + register (ex. INC A)
-            "IMM": 3,   # Opcode + register + immediate (ex: LD A, #$50)
-            "DIR": 3,   # Opcode + register + address (ex: LD A, $80)
-            "REG": 3,   # Opcode + reg1 + reg2 (ex: ADD A, B)
-            "REL": 2    # Opcode + offset (ex: BRA loop)
-        }
-        size = size_map.get(mode, 2)  # Default to 2 for ALU ops
-
+        size = 3  # Force all instructions to 3 bytes
     return Opcode(code, size, mode)
 
 REGISTERS = {
@@ -107,7 +99,7 @@ def _parse_instruction(inst: str) -> Tuple[str, List[str]]:
 # 3.  Two-pass assembler
 def assemble(lines: List[str]) -> bytes:
     # Convert source lines to a ROM image (byte string).
-    src = [ln.split(';', 1)[0].rstrip() for ln in lines]  # strip comments
+    src = [ln.split('//', 1)[0].rstrip() for ln in lines]  # strip comments
 
     # pass-1: collect labels / constants, compute PC
     labels: Dict[str, int] = {}
@@ -154,6 +146,7 @@ def assemble(lines: List[str]) -> bytes:
         if mode == "IMP":            # Single register (INC A, DEC B)
             reg_num = op_val
             rom.append(reg_num)
+            rom.append(0x00) 
 
         elif mode == "REG":          # Two registers (ADD A, B)
             reg1_num, reg2_num = op_val
@@ -170,11 +163,11 @@ def assemble(lines: List[str]) -> bytes:
         elif mode == "REL":        # Relative branch (BRA loop)
             if op_val == "*":
                 off = (-1 & 0xFF)
-
             else:
                 target_addr = labels[op_val]
-                current_pc = pc + 1  # PC after branch instruction (pc is already incremented)
-                offset = target_addr - current_pc
+                # PC during branch calculation will be the address after the full 3-byte instruction
+                current_pc_during_calculation = pc + 2  # pc+1 after opcode, +1 more for full instruction 
+                offset = target_addr - current_pc_during_calculation
                 
                 # Check if offset is within valid range (-128 to +127)
                 if offset < -128 or offset > 127:
@@ -183,6 +176,7 @@ def assemble(lines: List[str]) -> bytes:
                 off = offset & 0xFF
             
             rom.append(off)
+            rom.append(0x00)
             
         pc = len(rom)
     return bytes(rom)

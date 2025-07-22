@@ -1,4 +1,0 @@
-LD D, #$50
-LD A, #$05
-ADD A, D
-DONE: BRA DONE

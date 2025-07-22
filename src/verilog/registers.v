@@ -30,7 +30,7 @@ module register_file(
 
     task debug_print_registers;
         begin
-            $display("Final registers content: A=%02h B=%02h C=%02h D=%02h E=%02h F=%02h G=%02h H=%02h",
+            $display("Registers: A=%02h B=%02h C=%02h D=%02h E=%02h F=%02h G=%02h H=%02h",
                      registers[0], registers[1], registers[2], registers[3],
                      registers[4], registers[5], registers[6], registers[7]);
             $display("           I=%02h J=%02h K=%02h L=%02h M=%02h N=%02h O=%02h P=%02h",

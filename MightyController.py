@@ -588,42 +588,39 @@ class MainWindow(QWidget):
             self._run_simulation(program)
 
     def _compile_testbench(self) -> bool:
-        """Compile the testbench with latest fixes"""
-        testbench_dir = Path("testbench")
-        testbench_file = testbench_dir / "tb_new.out"
-        
-        # Ensure directory exists
-        testbench_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Include SystemVerilog files too
-        verilog_files = glob.glob("src/verilog/*.v")
+        tb_dir = Path("src/testbench")
+        tb_dir.mkdir(parents=True, exist_ok=True)     
+        out_path = tb_dir / "tb_new.out"
+
+        verilog_files       = glob.glob("src/verilog/*.v")
         systemverilog_files = glob.glob("src/verilog/*.sv")
-        all_files = verilog_files + systemverilog_files + ["src/testbench/computer_TB.v"]
-        
-        self._log(f"Found {len(verilog_files)} .v files, {len(systemverilog_files)} .sv files")
-        
-        compile_proc = QProcess()
-        
-        # Add SystemVerilog support and error capture
-        compile_args = [
-            "-g2012",  # SystemVerilog 2012 support
-            "-o", str(testbench_file), 
-            "-I", "src/verilog"
-        ] + all_files
-                
-        compile_proc.start("iverilog", compile_args)
-        compile_proc.waitForFinished()
-        
-        if compile_proc.exitCode() != 0:
-            
-            self._log("Compilation failed!")
-            self._log(f"Exit code: {compile_proc.exitCode()}")
-                
-            self._set_status("Compilation Failed ❌", "error")
-            return False
-            
-        self._log("Compilation successful!")
-        return True
+        all_sources = verilog_files + systemverilog_files + ["src/testbench/computer_TB.v"]
+
+        cmd = ["iverilog", "-g2012", "-o", str(out_path), "-I", "src/verilog"] + all_sources
+
+        self._log("Compiling …")
+
+        proc = QProcess(self)
+        proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        proc.start(cmd[0], cmd[1:])
+
+        while proc.waitForFinished(30):
+            chunk = proc.readAllStandardOutput()
+            if chunk:
+                self._log(bytes(chunk).decode().rstrip())
+
+        leftover = proc.readAllStandardOutput()
+        if leftover:
+            self._log(bytes(leftover).decode().rstrip())
+
+        ok = proc.exitStatus() == QProcess.ExitStatus.NormalExit and proc.exitCode() == 0
+        self._set_status("Compilation OK ✅" if ok else "Compilation Failed ❌",
+                        "ok" if ok else "error")
+
+        if ok:
+            self.last_build = out_path.resolve()          # store for run step
+
+        return ok
     
     def _build_simulation_args(self, program_name: str, testbench_file: Path) -> list:
         """Build simulation arguments with debug options"""
@@ -683,7 +680,7 @@ class MainWindow(QWidget):
         
         self.console.clear()
         # Build and run simulation
-        testbench_file = Path("testbench") / "tb_new.out"
+        testbench_file = Path("src/testbench") / "tb_new.out"
         sim_args = self._build_simulation_args(program_name, testbench_file)
         
         self.proc_sim.readyReadStandardOutput.connect(
