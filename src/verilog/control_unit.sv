@@ -177,6 +177,10 @@ module control_unit (
                     c = CTL(1'b0,1'b0,1'b0,1'b0,1'b0, 4'd0,4'd0, 2'd0,3'd0, 1'b0, pc_load, 1'b0,1'b0);
                 end
             end
+
+            DECODE: ;
+            EXECUTE: ;
+            default: ;
         endcase
         return c;
     endfunction
