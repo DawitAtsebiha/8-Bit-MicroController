@@ -29,22 +29,19 @@ module control_unit (
     } state_t;
 
     state_t state, next;
-    logic [7:0] reg_operand_1, reg_operand_2;
-    logic LoadStoreOP, DataOP, BranchOP;
     logic [3:0] cycle_count;
 
-    localparam int FETCH_CYCLES      = 6;  // 3 bytes × 2 bus cycles/byte
-    localparam int LDIMM_CYCLES      = 6;  // LD  rX,#imm   (same as today)
-    localparam int SINGLE_ALU_CYCLES = 3;  // INC/DEC
-    localparam int TWO_REG_CYCLES    = 1;  // ADD/SUB/AND/OR/XOR (now just 1 cycle)
-    localparam int BRANCH_CYCLES     = 2;  // BRA, BNE, BEQ need 2 cycles for calculation
+    logic [7:0] reg_operand_1, reg_operand_2;
+    logic LoadStoreOP, DataOP, BranchOP;
 
-    // Instruction decode
-    always_comb begin
-        LoadStoreOP = (IR[7:4] == 4'h8);
-        DataOP = (IR[7:4] == 4'h9) || (IR[7:4] == 4'hA);
-        BranchOP = (IR[7:4] == 4'h2);
+    // Capture operands at the right time
+    always_ff @(posedge clk) begin
+        if (state==FETCH && cycle_count==3) reg_operand_1 <= from_memory; // byte‑1 (register or first operand)
+        if (state==FETCH && cycle_count==5) reg_operand_2 <= from_memory; // byte‑2 (immediate or second operand)
     end
+
+    assign immediate_out = (IR[7:4]==4'h2) ? reg_operand_1 : reg_operand_2;
+    assign address_out   = reg_operand_2;
 
     // State register with cycle counter
     always_ff @(posedge clk or negedge reset) begin
@@ -58,168 +55,147 @@ module control_unit (
 				 cycle_count <= cycle_count + 4'd1;
 	 end
 
-    // Capture operands at the right time
-    always_ff @(posedge clk) begin            
-        case (state)
-            FETCH: begin
-                if (cycle_count == 3) reg_operand_1 <= from_memory; // byte‑1 (register or first operand)
-                if (cycle_count == 5) reg_operand_2 <= from_memory; // byte‑2 (immediate or second operand)
-            end
-            // Branch instructions use reg_operand_1 (byte 1) as the offset
-            // No need to re-read during BRANCH state
-        endcase
-    end
-
     // Next state logic
     always_comb begin
         next = state;
 
         unique case (state)
-            FETCH: if (cycle_count >= FETCH_CYCLES-1)  next = DECODE;
+            FETCH: if (cycle_count==4'd5)
+                        next = DECODE;
 
             DECODE: next = EXECUTE;
-            
-            EXECUTE: begin
-                if (LoadStoreOP)                  next = LOADSTORE;
-                else if (DataOP && IR[7:4]==4'h9) next = DATA;
-                else if (DataOP && IR[7:4]==4'hA) next = LOADSTORE; // single‑reg ALU re‑uses LS stage
-                else if (BranchOP)                next = BRANCH;
-                else                              next = FETCH;
-            end
-            
-            LOADSTORE: begin
-					if (IR == 8'h80) begin
-						if (cycle_count >= 4'd0)         
-							next = FETCH;
-					end 
-					else if (cycle_count >= SINGLE_ALU_CYCLES-1)
-						next = FETCH;
-			   end
 
-            DATA:      if (cycle_count >= TWO_REG_CYCLES-1)    next = FETCH;
-            BRANCH:    if (cycle_count >= BRANCH_CYCLES-1)     next = FETCH;
+            EXECUTE: case(IR[7:4])
+                          4'h8 : next = LOADSTORE;
+                          4'h9 : next = DATA;
+                          4'hA : next = LOADSTORE;
+                          4'h2 : next = BRANCH;
+                          default : next = FETCH;
+                       endcase
+
+            LOADSTORE: if ( (IR==8'h80) || cycle_count==3'd2)
+							next = FETCH;
+
+            DATA:      if (cycle_count==3'd0)
+                            next = FETCH;
+
+            BRANCH:    if (cycle_count==3'd1)
+                            next = FETCH;
             default:   next = FETCH;
         endcase
     end
 
-	always_comb begin
-		 {IR_Load, MAR_Load, PC_Load, PC_Inc,
-		  reg_write_enable, CCR_Load, write,
-		  ALU_B_Sel, addr_sel}                   = 9'b0;
+    typedef logic [24:0] ctrl_t;  // new type
+	 ctrl_t ctrl;
 
-		 {reg_read_addr_A, reg_read_addr_B,
-		  reg_write_addr,  ALU_Sel}              = 16'b0;
+    function automatic ctrl_t CTL (
+        input logic         a_sel, b_sel, wr, ccr_load, reg_we,
+        input logic [3:0]   alu, reg_wa,
+        input logic [1:0]   b1,
+        input logic [2:0]   b2,
+        input logic         pc_inc, pc_load, mar_load, ir_load
+    );
+        return {a_sel, b_sel, wr, ccr_load, reg_we,
+                alu, reg_wa, b1, b2, pc_inc, pc_load,
+                mar_load, ir_load};
+    endfunction
 
-		 {Bus2_Sel,  Bus1_Sel}                   = 5'b0;
+    localparam ctrl_t
+        C_NOP  = CTL(1'b0,1'b0,1'b0,1'b0,1'b0, 4'd0,4'd0, 2'd0,3'd0, 1'b0,1'b0,1'b0,1'b0),
+        CF0    = CTL(1'b0,1'b0,1'b0,1'b0,1'b0, 4'd0,4'd0, 2'd0,3'b001, 1'b0,1'b0,1'b1,1'b0),
+        CF1    = CTL(1'b0,1'b0,1'b0,1'b0,1'b0, 4'd0,4'd0, 2'd0,3'b010, 1'b1,1'b0,1'b0,1'b1),
+        CF2    = CF0,
+        CF3    = CTL(1'b0,1'b0,1'b0,1'b0,1'b0, 4'd0,4'd0, 2'd0,3'b010, 1'b1,1'b0,1'b0,1'b0),
+        CF4    = CF0,
+        CF5    = CF3;
 
-		 // Branch instructions use reg_operand_1 as offset, others use reg_operand_2
-		 immediate_out = BranchOP ? reg_operand_1 : reg_operand_2;
-		 address_out   = reg_operand_2;
+    function automatic ctrl_t INC_and_DEC (input logic inc, input logic [3:0] r);
+        return CTL(1'b1, 1'b0,          // addr_sel=1, ALU_B_Sel=0
+                   1'b1, 1'b1, 1'b1,        // write=0, CCR_Load=1, reg_we=1
+                   inc ? 4'd7 : 4'd8,  // ALU opcode
+                   r,
+                   2'd1, 3'd0,     // Bus1=reg, Bus2=ALU
+                   1'b0,1'b0,1'b0,1'b0);
+    endfunction
 
-		 unique case (state)
-            FETCH: begin
-                case (cycle_count)
-                    4'd0: {Bus1_Sel, Bus2_Sel, MAR_Load}         = {2'b00, 3'b001, 1'b1};
-                    4'd1: {Bus2_Sel, IR_Load,  PC_Inc}           = {3'b010, 1'b1,  1'b1};
-                    4'd2: {Bus1_Sel, Bus2_Sel, MAR_Load}         = {2'b00, 3'b001, 1'b1};
-                    4'd3: {Bus2_Sel,            PC_Inc}          = {3'b010,          1'b1};
-                    4'd4: {Bus1_Sel, Bus2_Sel, MAR_Load}         = {2'b00, 3'b001, 1'b1};
-                    4'd5: {Bus2_Sel,            PC_Inc}          = {3'b010,          1'b1};
+    function automatic ctrl_t decode(
+        input state_t       state,
+        input logic [2:0]   cycle_count,
+        input logic [7:0]   ir
+    );
+        ctrl_t c = C_NOP;
+        
+         unique case (state)
+            FETCH: case (cycle_count)
+                    4'd0: c = CF0;
+                    4'd1: c = CF1;
+                    4'd2: c = CF2;
+                    4'd3: c = CF3;
+                    4'd4: c = CF4;
+                    4'd5: c = CF5;
                 endcase
-            end
 
             LOADSTORE: begin
-                // --- LD rX,#imm (IR == 0x80) ---
-                if (IR == 8'h80) begin
-                        if (cycle_count == 4'd0) begin
-                            Bus2_Sel         = 3'b011;              // immediate already latched
-                            reg_write_addr   = reg_operand_1[3:0];
-                            reg_write_enable = 1'b1;
-                        end
+                if ((ir==8'h80) && (cycle_count==3'b0)) begin              // LD rX, #imm
+                    c = CTL(1'b0,1'b0,1'b0,1'b0,1'b1, 4'd0, reg_operand_1[3:0], 2'd0,3'b011,1'b0,1'b0,1'b0,1'b0);
                 end
-                // --- INC / DEC (single‑register ALU) ---
-                else if (DataOP && IR[7:4] == 4'hA) begin
-                        if (cycle_count == 4'd0)
-                            {Bus1_Sel, Bus2_Sel, MAR_Load} = {2'b00, 3'b001, 1'b1};
-                        if (cycle_count == 4'd2) begin
-                            CCR_Load = 1'b1;
-                            Bus1_Sel = 2'b01;   // reg data → ALU A
-                            addr_sel = 1'b1;
-                            case (IR)
-                                8'hA0: begin // INC
-                                        {reg_read_addr_A, reg_write_addr,
-                                        reg_write_enable, ALU_Sel}
-                                            = {reg_operand_1[3:0], reg_operand_1[3:0],
-                                                1'b1,              4'd7};
-                                end
-                                8'hA1: begin // DEC
-                                        {reg_read_addr_A, reg_write_addr,
-                                        reg_write_enable, ALU_Sel}
-                                            = {reg_operand_1[3:0], reg_operand_1[3:0],
-                                                1'b1,              4'd8};
-                                end
-                            endcase
-                        end
+                else if ((ir[7:4]==4'hA) && (cycle_count==3'b0)) begin     // prepare INC/DEC
+                    c = CTL(1'b0,1'b0,1'b0,1'b0,1'b0, 4'd0,4'd0, 2'd0,3'b001, 1'b0,1'b0,1'b1,1'b0);
+                end
+                else if ((ir[7:4]==4'hA) && (cycle_count==3'd2)) begin                 // execute INC/DEC
+                    c = INC_and_DEC(ir==8'hA0, reg_operand_1[3:0]);
                 end
             end
 
-            DATA: begin
-                if (cycle_count == 4'd0) begin
-                        {CCR_Load, Bus1_Sel, Bus2_Sel} = {1'b1, 2'b01, 3'b000};
-                        unique case (IR)
-                            8'h90: begin // ADD
-                                {reg_read_addr_A, reg_read_addr_B,
-                                    reg_write_addr,   reg_write_enable, ALU_Sel}
-                                        = {reg_operand_1[3:0], reg_operand_2[3:0],
-                                            reg_operand_1[3:0], 1'b1,           4'd0};
-                            end
-                            8'h91: begin // SUB
-                                {reg_read_addr_A, reg_read_addr_B,
-                                    reg_write_addr,   reg_write_enable, ALU_Sel}
-                                        = {reg_operand_1[3:0], reg_operand_2[3:0],
-                                            reg_operand_1[3:0], 1'b1,           4'd1};
-                            end
-                            8'h92: begin // AND
-                                {reg_read_addr_A, reg_read_addr_B,
-                                    reg_write_addr,   reg_write_enable, ALU_Sel}
-                                        = {reg_operand_1[3:0], reg_operand_2[3:0],
-                                            reg_operand_1[3:0], 1'b1,           4'd4};
-                            end
-                            8'h93: begin // OR
-                                {reg_read_addr_A, reg_read_addr_B,
-                                    reg_write_addr,   reg_write_enable, ALU_Sel}
-                                        = {reg_operand_1[3:0], reg_operand_2[3:0],
-                                            reg_operand_1[3:0], 1'b1,           4'd5};
-                            end
-                            8'h94: begin // XOR
-                                {reg_read_addr_A, reg_read_addr_B,
-                                    reg_write_addr,   reg_write_enable, ALU_Sel}
-                                        = {reg_operand_1[3:0], reg_operand_2[3:0],
-                                            reg_operand_1[3:0], 1'b1,           4'd6};
-                            end
-                            default: ;
-                        endcase
-                end
+            DATA: if (cycle_count==4'd0) begin
+                logic [3:0] alu;
+                case (ir[2:0])
+                    3'b000: alu = 4'd0;   // ADD
+                    3'b001: alu = 4'd1;   // SUB
+                    3'b010: alu = 4'd4;   // AND
+                    3'b011: alu = 4'd5;   // OR
+                    3'b100: alu = 4'd6;   // XOR
+                    default: alu = 4'd0;
+                endcase
+                c = CTL(1'b0,1'b0,1'b0,1'b1,1'b1, alu, reg_operand_1[3:0], 2'd1, 3'd0, 1'b0,1'b0,1'b0,1'b0);
             end
 
             BRANCH: begin
-                if (cycle_count == 4'd0) begin
-                        // Set up ALU to calculate PC + branch offset  
-                        {Bus1_Sel, ALU_Sel, ALU_B_Sel} = {2'b00, 4'd0, 1'b1};
-                end
-                if (cycle_count == 4'd1) begin
-                        // Load ALU result (PC + offset) into PC if branch condition is met
-                        Bus2_Sel = 3'b000;  // ALU result to BUS2
-                        case (IR)
-                            8'h20: PC_Load = 1'b1;                 // BRA           TO-DO: BNE and BEQ both work fine, however when BRA
-                            8'h23: PC_Load = !CCR_Result[2];       // BNE                  is used it keeps iterating over the ENTIRE program, 
-                            8'h24: PC_Load =  CCR_Result[2];       // BEQ                  so making the operations pointless as it putting in the original values.
-                            default: ;
-                        endcase
+                if (cycle_count==4'd0)
+                    // Set up ALU to calculate PC + branch offset  
+                    c = CTL(1'b1,1'b1,1'b0,1'b0,1'b0, 4'd0,4'd0, 2'd0,3'd0, 1'b0,1'b0,1'b0,1'b0);
+                if (cycle_count==4'd1) begin
+                    // Load ALU result (PC + offset) into PC if branch condition is met
+                    logic pc_load;
+                    logic pc_ld;
+                    case (ir[2:0])
+                        3'b000: pc_load = 1'b1;              // BRA
+                        3'b011: pc_load = ~CCR_Result[2];    // BNE
+                        3'b100: pc_load =  CCR_Result[2];    // BEQ
+                        default: pc_load = 1'b0;
+                    endcase
+                    c = CTL(1'b0,1'b0,1'b0,1'b0,1'b0, 4'd0,4'd0, 2'd0,3'd0, 1'b0, pc_load, 1'b0,1'b0);
                 end
             end
-
-            default: ;
         endcase
-    end
+        return c;
+    endfunction
+
+    always_comb ctrl = decode(state, cycle_count, IR);
+
+    // Unpack once
+    assign { addr_sel, ALU_B_Sel, write, CCR_Load, reg_write_enable,
+             ALU_Sel,
+             reg_write_addr,
+             Bus1_Sel, Bus2_Sel,
+             PC_Inc, PC_Load, MAR_Load, IR_Load } = ctrl;
+
+    // Read-address buses (only DATA & INC/DEC need them)
+    assign reg_read_addr_A = (state==DATA || (state==LOADSTORE && IR[7:4]==4'hA)) ? reg_operand_1[3:0] : 4'd0;
+    assign reg_read_addr_B = (state==DATA) ? reg_operand_2[3:0] : 4'd0;
+
+    always_ff @(posedge clk)
+        if (debug_inner && write)
+            $display("[%0t] CU-write  R%0d <= %02h", $time, reg_write_addr, IR);
+
 endmodule
